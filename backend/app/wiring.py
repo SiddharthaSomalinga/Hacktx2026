@@ -29,7 +29,7 @@ def build_ai(settings: Settings) -> TopicAI:
 def build_services(settings: Settings) -> Services:
     repo = PostgresRepository(settings.database_url, settings.database_read_url)
     ctx = Context(
-        repo=repo,  # type: ignore[arg-type]  # completed in B1
+        repo=repo,
         ai=build_ai(settings),
         notifier=WebPushNotifier(
             settings.vapid_private_key.get_secret_value(), settings.vapid_subject
