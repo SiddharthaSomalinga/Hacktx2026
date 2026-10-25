@@ -7,7 +7,7 @@ Session log. Concrete changes, commands and observed results only.
 - **Milestone:** all branches integrated in `v1final` (D40); the two-phone flow works in the
   browser with live Muse (Session 7). Remaining: the Tiger migration for D43, Q14 (demo-table
   sensors), and the D36 Vultr deploy.
-- **Tests:** 205 pass with Postgres (`make test-db`); 174 pass and 29 skip without it. Live e2e: 114/114 (Session 6).
+- **Tests:** 211 pass with Postgres (`make test-db`); 182 pass and 29 skip without it. Live e2e: 114/114 (Session 6).
 - **Open questions:** Q14, Q19, Q20 (PLAN). Q2, U1, U2 and U3 resolved.
 
 ---
@@ -477,6 +477,13 @@ Caught before committing:
 ### Changes
 - PLAN: D44–D53, Q15–Q20, the Branches table, F3.6 and F4.5.2 wording.
 - ARCHITECTURE §7 and §14: the pre-D43 text on names, icebreaker inputs and the request push.
+
+### Backend for D53
+- `GET /api/seats/:id` (`MapService.seat`); `SafetyService` resolves the other person from a
+  `request_id` or `match_id` and returns `not_your_request` / `not_in_match` to outsiders;
+  `MatchOut` gains `building_id`, `table_id`; `SearchStatusOut` gains `request_id`, `joined`,
+  `label`, `offered_group`. REQUIREMENTS §7 and ARCH §13 updated.
+- `make check`: ruff, mypy clean, 182 passed, 29 skipped. `make test-db`: 211 passed.
 
 ## Next steps
 1. **Tiger migration (before any deploy of `v1final`):** on a hotspot, from `backend/`, run

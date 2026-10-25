@@ -357,6 +357,8 @@ All `fetch` calls go through one `src/api.js`. It sends cookies, turns
 
 **v1.0 → v1.1:** the "Changes from v1.0" list at the top of REQUIREMENTS.
 
+**v1.1 → D53 (frontend redo):** `GET /api/seats/:id`; `/block` and `/report` accept `request_id` or `match_id` and resolve the other side server-side (`SafetyService`); `MatchOut` adds `building_id`, `table_id`; `SearchStatusOut` adds `request_id`, `joined`, `label`, `offered_group`. All additive except that `/block` and `/report` no longer require `user_id`.
+
 **Source of truth → spec (D1):**
 
 | `ghost_seats_source_of_truth.md` | REQUIREMENTS (authoritative) |

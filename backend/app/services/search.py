@@ -122,7 +122,14 @@ class SearchService:
                 tx.match_for_search(search_id) if search.status is SearchStatus.MATCHED else None
             )
             return SearchStatusView(
-                search.status, left, match.id if match else None, _asking(tx, pending)
+                status=search.status,
+                seconds_left=left,
+                match_id=match.id if match else None,
+                asking=_asking(tx, pending),
+                request_id=pending.id if pending else None,
+                joined=search.joined_at is not None,
+                label=search.label,
+                offered_group=search.offered_group,
             )
 
     def cancel(self, user_id: str, search_id: str) -> SearchStatus:

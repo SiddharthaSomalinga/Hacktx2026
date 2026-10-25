@@ -172,10 +172,23 @@ def test_search_hides_names_but_join_shows_first_name_and_major(world: World) ->
     # D43: before accept, each side sees the other's first name and major, nothing more.
     assert status["asking"] == {"first_name": "Alex", "major": "Biochemistry"}
     inbox = alex.ok("GET", "/api/host/inbox")
+    assert status["request_id"] == inbox[0]["request_id"]
     assert (inbox[0]["seeker_first_name"], inbox[0]["seeker_major"]) == ("Priya", "Chemistry")
     assert inbox[0]["course_label"] == "CH 320M · Organic Chemistry I"
     assert inbox[0]["table_label"] == "Table 01"
     assert [m.message.kind for m in world.repo.data.outbox] == ["request_received"]
+
+
+def test_search_status_tells_a_preview_from_a_joined_search(world: World) -> None:
+    """D53: a reload of /search/:id must rebuild the right screen from the status alone."""
+    host_at(world, "alex", "s1")
+    priya, found = seeker(world)
+    sid = found["search_id"]
+    preview = priya.ok("GET", f"/api/search/{sid}")
+    assert preview["joined"] is False and preview["request_id"] is None
+    assert (preview["label"], preview["offered_group"]) == (found["label"], "same_course")
+    joined = priya.ok("POST", f"/api/search/{sid}/join")
+    assert joined["joined"] is True and joined["request_id"] is not None
 
 
 def test_related_group_is_offered_when_no_same_course_host(world: World) -> None:
@@ -314,6 +327,7 @@ def test_accept_creates_the_match_blinks_blue_and_names_appear(world: World) -> 
     assert seen_by_seeker["role"] == "seeker" and seen_by_seeker["other_first_name"] == "Alex"
     assert seen_by_seeker["assigned_seat_id"] == "s2"  # open seat next to the host (FR-37)
     assert seen_by_seeker["table_label"] == "Table 01" and seen_by_seeker["building"] == "Library"
+    assert (seen_by_seeker["building_id"], seen_by_seeker["table_id"]) == ("lib", "t1")  # D53
     assert seen_by_seeker["card_url"] == "/cards/chemistry.png"
     assert "CH 320M" in seen_by_seeker["icebreaker"]
     assert alex.ok("GET", f"/api/matches/{mid}")["other_first_name"] == "Priya"
@@ -390,6 +404,50 @@ def test_blocks_apply_both_ways_and_report_also_blocks(world: World) -> None:
     assert found["same_course"] == []
     assert priya.error("POST", "/api/block", {"user_id": "priya"}) == (422, "validation_error")
     assert priya.error("POST", "/api/block", {"user_id": "ghost"}) == (404, "unknown_user")
+
+
+def test_block_needs_exactly_one_way_to_name_the_person(world: World) -> None:
+    priya = world.phone("priya")
+    assert priya.error("POST", "/api/block", {}) == (422, "validation_error")
+    both = {"user_id": "alex", "match_id": "m"}
+    assert priya.error("POST", "/api/block", both) == (422, "validation_error")
+    assert priya.error("POST", "/api/report", {"reason": "rude"}) == (422, "validation_error")
+
+
+def test_seeker_blocks_the_asked_host_by_request_id(world: World) -> None:
+    """D53: the waiting screen names no user id, only the pending request."""
+    alex = host_at(world, "alex", "s1")
+    priya, found = seeker(world)
+    rid = priya.ok("POST", f"/api/search/{found['search_id']}/join")["request_id"]
+    priya.ok("POST", "/api/block", {"request_id": rid})
+    assert ("priya", "alex") in world.repo.data.blocks
+    assert world.phone("sam").error("POST", "/api/block", {"request_id": rid}) == (
+        403,
+        "not_your_request",
+    )
+    assert alex.error("POST", "/api/block", {"request_id": "nope"}) == (404, "request_not_found")
+
+
+def test_host_reports_the_seeker_from_the_inbox_card(world: World) -> None:
+    alex = host_at(world, "alex", "s1")
+    priya, found = seeker(world)
+    priya.ok("POST", f"/api/search/{found['search_id']}/join")
+    rid = alex.ok("GET", "/api/host/inbox")[0]["request_id"]
+    alex.ok("POST", "/api/report", {"request_id": rid, "reason": "spam"})
+    assert ("alex", "priya") in world.repo.data.blocks
+    assert [(r[0], r[1]) for r in world.repo.data.reports] == [("alex", "priya")]
+
+
+def test_either_side_blocks_the_other_by_match_id(world: World) -> None:
+    alex, priya, mid = matched(world)
+    priya.ok("POST", "/api/block", {"match_id": mid})
+    alex.ok("POST", "/api/block", {"match_id": mid})
+    assert {("priya", "alex"), ("alex", "priya")} <= world.repo.data.blocks
+    assert world.phone("sam").error("POST", "/api/block", {"match_id": mid}) == (
+        403,
+        "not_in_match",
+    )
+    assert priya.error("POST", "/api/block", {"match_id": "nope"}) == (404, "match_not_found")
 
 
 # --- push ------------------------------------------------------------------------

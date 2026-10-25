@@ -22,6 +22,7 @@ Decision numbers refer to `PLAN.md`, decision log.
 - **Found during the build (v1.1, same release):** `label`, `searches.joined_at`, `host_sessions.confirm_notified_at` (§6); `table_not_found`, `seat_taken`, `database_unavailable` (§7); `PUSH_MAX_ATTEMPTS`, `FRONTEND_DIST`, `COOKIE_SECURE`, `WORKER_ENABLED`, `DB_POOL_SIZE` (§8); Q12 values 24 h / 30 days.
 - **D42, D43** Requests wait 5 minutes; first name and major are visible before accept on both sides and in the request push; Muse ranks and writes icebreakers with majors.
 - **§8 (D38, D41)** `MUSE_BASE_URL`, `MUSE_MODEL`, `DB_TIMEOUT_S`.
+- **§7 (D53)** `GET /api/seats/:id`; block and report by request or match id; ids on the match and search status.
 - **§6** Adds `buildings.lat/lng`, `keywords`, `offered_group`, change-only `seat_readings` with offline markers, `push_subscriptions` and `notification_outbox`. **§7** New and changed endpoints, node key, error codes. **§8** New keys and an environment table.
 
 # 1. Overview
@@ -233,13 +234,14 @@ JSON over HTTPS. Errors: `{"error": "<code>", "message": "<sentence>"}` with a 4
 | GET /api/buildings/:id | None | | See shape below; supports `ETag` / `If-None-Match` |
 | GET /api/recommend?building_id=&floor=&table_id= | None | `floor`, `table_id` optional | `{seat_id, table_id, floor, kind, level}` with kind `open` or `likely_opening` and level `table`, `floor` or `building`; or `{full: true, nearest_building_id}` |
 | GET /api/buildings/:id/history | None | | `[{hour, open_avg}]` |
+| GET /api/seats/:id | None | | `{id, building_id, floor, table_id, table_label, position, state}` (D53) |
 | GET /api/demo-users | None | | `[{id, first_name, major}]` |
 | POST /api/login | None | `{user_id}` | `{id, first_name, major}`; sets the session cookie |
 | POST /api/logout | Login | | `{ok}`; clears the cookie |
 | GET /api/me | None | | `{user: {id, first_name, major} or null, host: {session_id, seat_id, label, muted, status, hidden_reason} or null, search_id or null, match_id or null}`. `status` is `findable` or `hidden`; `hidden_reason` is `needs_topic`, `away`, `muted`, `table_full`, `in_match` or `confirm_pending` |
 | POST /api/search | Login | `{topic_raw, group?}`; `group: "related"` only for FR-54 | `{search_id, label, course_code, subject, offered_group, has_real_hosts, same_course: [{building_id, floor, count}], related: [...]}` |
-| POST /api/search/:id/join | Login | | `{status, seconds_left}` |
-| GET /api/search/:id | Login | | `{status, seconds_left, match_id, asking}`; `asking` is `{first_name, major}` of the host holding the pending request, or null (D43) |
+| POST /api/search/:id/join | Login | | Same as `GET /api/search/:id` |
+| GET /api/search/:id | Login | | `{status, seconds_left, match_id, asking, request_id, joined, label, offered_group}`; `asking` is `{first_name, major}` of the host holding the pending request (`request_id`), or null (D43). `joined` is false while the search is a preview (D53) |
 | POST /api/search/:id/cancel | Login | | `{status}` |
 | POST /api/host/link | Login | `{seat_id}` | `{session_id}` |
 | POST /api/host/topic | Login | `{topic_raw, about_me}` | `{label, course_code, subject}` |
@@ -249,11 +251,11 @@ JSON over HTTPS. Errors: `{"error": "<code>", "message": "<sentence>"}` with a 4
 | GET /api/host/inbox | Login | | `[{request_id, seeker_first_name, seeker_major, course_label, table_label, seconds_left}]` (D43) |
 | POST /api/requests/:id/accept | Login | | `{match_id}` |
 | POST /api/requests/:id/decline | Login | `{mute?}` | `{status}`; `mute: true` also mutes (FR-28) |
-| GET /api/matches/:id | Login | | `{status, role, other_first_name, other_major, building, floor, table_label, assigned_seat_id, alt_seat_id, icebreaker, card_url}` |
+| GET /api/matches/:id | Login | | `{status, role, other_first_name, other_major, building, building_id, floor, table_id, table_label, assigned_seat_id, alt_seat_id, icebreaker, card_url}` |
 | POST /api/matches/:id/arrived | Login | | `{status}` |
 | POST /api/matches/:id/cancel | Login | | `{status}` |
-| POST /api/block | Login | `{user_id}` | `{ok}` |
-| POST /api/report | Login | `{user_id, reason}` | `{ok}` |
+| POST /api/block | Login | Exactly one of `{user_id}`, `{request_id}`, `{match_id}`; a request or match names its other side (D53) | `{ok}` |
+| POST /api/report | Login | The same, plus `reason` | `{ok}` |
 | GET /api/push/vapid-public-key | None | | `{key}` |
 | POST /api/push/subscribe | Login | `{endpoint, keys: {p256dh, auth}}` | `{ok}` |
 | DELETE /api/push/subscribe | Login | `{endpoint}` | `{ok}` |
