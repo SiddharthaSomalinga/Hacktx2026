@@ -17,7 +17,7 @@ Who builds what, in what order, and why. Requirement ids refer to
 |---|---|---|---|
 | Backend | Manideep | `backend/`, `documentation/` | `v1backend` |
 | Frontend | Software partner | The web app and PWA (`frontend/` after D6) | `v1frontend` |
-| Hardware | Hardware pair | `firmware/`, `bridge/`, the physical demo table | Q2 |
+| Hardware | Hardware pair | `firmware/`, `bridge/`, the physical demo table | `Arduino/Transmitter-Code`, `v1hardsoft` |
 
 No two roles edit the same folder. The contract between them is REQUIREMENTS
 §7 (API) and §10.3 (serial). A change to either is agreed by the roles it
@@ -128,7 +128,7 @@ commit when green.
 2. ✅ Boundary logging without secrets (ARCH §7).
 3. ✅ Read/write split via `DATABASE_READ_URL`. Test: locked and write paths never use the read pool.
 4. ✅ `scripts/load_check.py`: 500 polling clients plus 50 fake nodes; p50/p95 latency and DB load recorded in PROGRESS with the machine named.
-5. 🚧 Security pass and pre-commit checklist ✅; two instances verified locally (4 workers) ✅; merge into `v1` and deploy ⬜ (D36, IC1).
+5. 🚧 Security pass and pre-commit checklist ✅; two instances verified locally (4 workers) ✅; merge into `v1final` and deploy ⬜ (D36, D40, IC1).
 
 ### B6 — Ship
 1. ⬜ Demo environment: `GHOST_S=15`.
@@ -233,9 +233,8 @@ commit when green.
 | IC2 | B3 + F3 | Topic → search → join reaches a host's inbox |
 | IC3 | B4 + F4 (+ B4.5/F4.5 when done) | Every edge of both user flows on two phones and the real seat |
 
-At each checkpoint: every role pushes its branch, the branches merge into `v1`
-(no shared folders, so no conflicts), `v1` is deployed, and the result is
-logged in PROGRESS.
+At each checkpoint: every role pushes its branch, the branches merge into `v1final`
+(D40), `v1final` is deployed, and the result is logged in PROGRESS.
 
 ## Acceptance criteria
 
@@ -256,7 +255,7 @@ REQUIREMENTS §11, plus WebSockets (FR-10 specifies polling).
 | Id | Question | Owner | Blocks | Status |
 |---|---|---|---|---|
 | Q1 | Can a join request reach a simulated host? | Team | B4.4 | Resolved: D22 |
-| Q2 | Hardware branch name; demo-table node and seat ids | Hardware pair | B0.7, H0 | **Open** |
+| Q2 | Hardware branch name; demo-table node and seat ids | Hardware pair | B0.7, H0 | Resolved: branches `Arduino/Transmitter-Code` and `v1hardsoft`; the bridge uses the placeholder ids `table-1` / `t1-s1` |
 | Q4 | What does turning on host mode do before linking? | Team | B3.3 | Resolved: D17 |
 | Q5 | "Seat empty" vs "no person" for ending sessions and matches | Team | B3.3, B4.2 | Resolved: D18 |
 | Q6 | Mute from a request card | Team | B3.5 | Resolved: D20 |
@@ -267,6 +266,7 @@ REQUIREMENTS §11, plus WebSockets (FR-10 specifies polling).
 | Q11 | FR-27 confirmation endpoint and grace | Team | B3.3 | Resolved: D24 |
 | Q12 | History chart window and raw retention | Team | B2.3 | Resolved: 24 h, 30 days (hourly rollup kept) |
 | Q13 | On accept, the host's table has no open seat at that instant | Team | B4.1 | Resolved: nearest open seat on the floor; none → no assigned seat |
+| Q14 | The demo seat has one IR proximity sensor, so the bridge sends `human_present = object_present`. A bag reads as a person and the seat never turns `likely_opening` (D18, HW-1..6). Add a presence sensor, or change the demo? | Team, hardware pair | IC1, B6 | **Open** |
 | U1 | Muse Spark and Muse Image access (key, endpoint, auth, JSON mode) | Backend, from Meta sponsors | B4.7, F4.3 | Resolved: key obtained; API per D38. `muse-image-1.0` is on the same API (F4.3) |
 | U2 | Tiger Data: connection limit (sets `DB_POOL_SIZE`) | Backend | Deploy | Resolved: `max_connections` 105 (12 reserved); 2 hosts × 2 workers × 5 = 20, so `DB_POOL_SIZE` stays 5 |
 | U3 | Deploy host (always-on, HTTPS, env vars, ≥ 2 instances) | Backend | B2.4 | Resolved: D36, D37 |
@@ -491,3 +491,24 @@ Pi bridge use this URL, so it is fixed before `make qr` runs.
   `AI_TIMEOUT_S` budget: any error, 429 or timeout goes straight to the fallback (NFR-3).
 - **Privacy:** prompts carry topic and about-me text only, and host ids are replaced by
   `h1…hN` (REQUIREMENTS §9). User text is passed as JSON data, never as instructions.
+
+**D39 — Hardware code lives in `firmware/` and `bridge/`; the backend has no in-memory mode.**
+`v1hardsoft` added two things under `backend/`.
+- **A `DATABASE_URL=memory` mode in `wiring.py` is dropped.** It imported `tests/`, which the
+  image does not contain (`ModuleNotFoundError` in the container), and it kept seat state in
+  process memory, which two instances cannot share (NFR-8). Tiger Data or the local Docker
+  database replaces it.
+- **The serial bridge moves to `bridge/arduino_bridge.py`.** It reads `GHOSTSEATS_URL`,
+  `NODE_KEY`, `NODE_ID`, `SEAT_ID` and `SERIAL_PORT` from the environment, so no key sits in
+  the public repo, and it has its own `requirements.txt` (`pyserial` is not a backend
+  dependency). It keeps the sketch's protocol: it parses `occupied: true|false`, posts on
+  every change and at least every 2 s (HW-8), and logs the LED color returned.
+- **The Arduino files move into `firmware/`.** The sketch goes to
+  `firmware/HACKATHON/HACKATHON.ino`, since the Arduino IDE needs the folder name to match. The
+  Web Bluetooth component is kept as reference only: it posts `{table_id, occupied}`, which is
+  not the `/api/readings` contract.
+
+**D40 — `v1final` is the final integration branch, then `main`.** `v1final` = `v1backend` +
+`v1hardsoft` (which contains `v1` and `v1frontend`) + `Arduino/Transmitter-Code`, plus the
+D39 clean-up. It deploys with `FRONTEND_DIR=.` while the frontend sits at the repo root (D6
+is the partner's call). Once it runs on the servers, `main` fast-forwards to it.
