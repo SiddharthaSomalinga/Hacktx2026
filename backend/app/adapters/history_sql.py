@@ -35,8 +35,11 @@ rows_in AS (
   WHERE r.seat_id IN (SELECT id FROM seats_b)
     AND r.time > %(since)s AND r.time < %(until)s
 ),
-intervals AS (
+all_intervals AS (
+  -- lead() must see every row: a WHERE here would run before the window function and let an
+  -- open interval run past the change that ended it.
   SELECT
+    i.online AND NOT i.object_present AND NOT i.human_present AS is_open,
     greatest(i.time, %(since)s) AS start_at,
     least(
       coalesce(lead(i.time) OVER (PARTITION BY i.seat_id ORDER BY i.time), %(until)s),
@@ -45,7 +48,9 @@ intervals AS (
     ) AS stop_at
   FROM rows_in i
   JOIN seats_b sb ON sb.id = i.seat_id
-  WHERE i.online AND NOT i.object_present AND NOT i.human_present
+),
+intervals AS (
+  SELECT start_at, stop_at FROM all_intervals WHERE is_open
 ),
 hours AS (
   SELECT h AS hour_at, least(h + interval '1 hour', %(until)s) AS hour_end
