@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import timedelta
 
 import pytest
 from fastapi import FastAPI
@@ -67,6 +68,8 @@ def make_world(
             history_window_h=settings.history_window_h,
             push_max_attempts=settings.push_max_attempts,
             vapid_public_key=settings.vapid_public_key,
+            demo_hosts=settings.demo_hosts,
+            demo_accept=timedelta(seconds=settings.demo_accept_s),
         )
         services = Services.build(ctx)
         build_world(repo)

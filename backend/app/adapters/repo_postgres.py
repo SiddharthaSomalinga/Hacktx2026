@@ -680,6 +680,17 @@ class PostgresTx:
         )
         return [str(r["id"]) for r in rows]
 
+    def demo_request_ids(self, created_before: datetime) -> list[str]:
+        rows = self._all(
+            """SELECT r.id FROM requests r
+               JOIN host_sessions h ON h.id = r.host_session_id
+               JOIN seats s ON s.id = h.seat_id
+               WHERE r.status = 'pending' AND s.is_simulated AND r.created_at <= %(before)s
+               ORDER BY r.created_at, r.id""",
+            {"before": created_before},
+        )
+        return [str(r["id"]) for r in rows]
+
 
 @contextmanager
 def _unavailable_on_connection_failure() -> Iterator[None]:

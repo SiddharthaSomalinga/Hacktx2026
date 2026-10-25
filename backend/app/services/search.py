@@ -31,8 +31,10 @@ def _counts(candidates: list[Candidate], group: Group) -> list[GroupCountView]:
     return [GroupCountView(b, f, n) for b, f, n in aggregate(places)]
 
 
-def _has_real(candidates: list[Candidate], group: Group) -> bool:
-    return any(c.group is group and not c.seat.is_simulated for c in candidates)
+def _has_real(candidates: list[Candidate], group: Group, demo: bool = False) -> bool:
+    """Whether anyone in the group can take a request: real hosts, plus simulated ones in demo
+    mode (FR-29, FR-31, D56)."""
+    return any(c.group is group and (demo or not c.seat.is_simulated) for c in candidates)
 
 
 class SearchService:
@@ -86,7 +88,7 @@ class SearchService:
             course_code=topic.course_code,
             subject=topic.subject,
             offered_group=offered,
-            has_real_hosts=_has_real(candidates, offered),
+            has_real_hosts=_has_real(candidates, offered, self._ctx.demo_hosts),
             same_course=_counts(candidates, Group.SAME_COURSE),
             related=_counts(candidates, Group.RELATED),
         )
@@ -98,7 +100,9 @@ class SearchService:
             if search.status is not SearchStatus.ACTIVE:
                 raise conflict("search_not_active", "This search has ended")
             if search.joined_at is None:
-                if not _has_real(self._candidates(tx, now, search), search.offered_group):
+                if not _has_real(
+                    self._candidates(tx, now, search), search.offered_group, self._ctx.demo_hosts
+                ):
                     raise conflict("no_real_hosts", "No one in this group can take a request")
                 hour_ago = now - timedelta(hours=1)
                 if (

@@ -213,6 +213,28 @@ def test_simulated_hosts_count_but_join_is_refused_and_they_never_get_requests(
     assert priya.error("POST", f"/api/search/{found['search_id']}/join") == (409, "no_real_hosts")
 
 
+def test_demo_hosts_take_requests_and_accept_after_the_delay(make_world) -> None:  # type: ignore[no-untyped-def]
+    """D56: with DEMO_HOSTS on, a simulated host can be joined and accepts by itself."""
+    world = make_world(demo_hosts=True, demo_accept_s=5)
+    add_sim_host(world)
+    priya, found = seeker(world)
+    assert found["has_real_hosts"] is True
+    sid = found["search_id"]
+    assert priya.ok("POST", f"/api/search/{sid}/join")["asking"]["first_name"] == "Taylor"
+    world.clock.advance(4)
+    world.services.scheduler.tick()
+    assert priya.ok("GET", f"/api/search/{sid}")["status"] == "active"  # not before the delay
+    world.clock.advance(1)
+    world.services.scheduler.tick()
+    status = priya.ok("GET", f"/api/search/{sid}")
+    assert status["status"] == "matched"
+    match = priya.ok("GET", f"/api/matches/{status['match_id']}")
+    assert match["other_first_name"] == "Taylor" and match["status"] == "active"
+    world.clock.advance(600)  # a simulated seat has no sensor: the match must not cancel
+    world.services.scheduler.tick()
+    assert priya.ok("GET", f"/api/matches/{status['match_id']}")["status"] == "active"
+
+
 def test_cascade_skips_simulated_and_declined_hosts_then_exhausts(world: World) -> None:
     add_sim_host(world)
     alex = host_at(world, "alex", "s1")
