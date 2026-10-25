@@ -37,6 +37,7 @@ function App() {
   const [notice, setNotice] = useState('')
   const [showLogin, setShowLogin] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [demoUsers, setDemoUsers] = useState([])
   const [showTopic, setShowTopic] = useState(false)
   const [showSearch, setShowSearch] = useState(false)
   const [hostOpen, setHostOpen] = useState(false)
@@ -53,6 +54,7 @@ function App() {
 
   useEffect(() => {
     api.me().then((data) => data?.user && setUser(data.user)).catch(() => {})
+    api.demoUsers().then((users) => setDemoUsers(users || [])).catch(() => {})
     api.buildings().then((data) => {
       if (data?.length) {
         setBuildings(data)
@@ -95,9 +97,8 @@ function App() {
   const openSeats = useMemo(() => buildings.reduce((total, building) => total + (building.open || 0), 0) || seedSeats.filter(([, status]) => status === 'open').length, [buildings])
 
   function chooseBuilding(building) { setSelectedBuilding(building); setView('map'); setNotice(`${building.name} selected`) }
-  function login(name) {
-    const ids = { Alex: 'u-alex', Maya: 'u-priya', Jordan: 'u-jordan' }
-    api.login({ user_id: ids[name] || 'u-alex' }).then((nextUser) => {
+  function login(userId) {
+    api.login({ user_id: userId }).then((nextUser) => {
       setUser(nextUser); setShowLogin(false); setShowTopic(true)
     }).catch(() => setNotice('Unable to sign in'))
   }
@@ -136,7 +137,7 @@ function App() {
     {view === 'match' && <MatchView match={match} onBack={() => setView('map')} onDone={() => { setMatch(null); setView('map'); setNotice('Match closed') }} />}
     <section className="action-strip"><div><span className="eyebrow">Make the next hour count</span><strong>Find a study partner who is already here.</strong></div><button className="primary-button" onClick={() => user ? setShowSearch(true) : setShowLogin(true)}><Users size={17} /> Find someone <ArrowUpRight size={16} /></button></section>
     <footer className="footer"><span>Ghost Seats · UT Austin</span><span>Live occupancy · Central Time</span><span><Compass size={14} /> Built for the in-between moments</span></footer>
-    {showLogin && <Modal title="Welcome to Ghost Seats" onClose={() => setShowLogin(false)}><p className="modal-copy">Choose a demo identity to explore the seeker and host flows.</p><div className="identity-list">{['Alex', 'Priya', 'Jordan'].map((name) => <button key={name} className="identity-row" onClick={() => login(name)}><span className="avatar">{name[0]}</span><span><strong>{name}</strong><small>UT Austin student</small></span><ArrowUpRight size={16} /></button>)}</div></Modal>}
+    {showLogin && <Modal title="Welcome to Ghost Seats" onClose={() => setShowLogin(false)}><p className="modal-copy">Choose a demo identity to explore the seeker and host flows.</p><div className="identity-list">{demoUsers.length ? demoUsers.map((demo) => <button key={demo.id} className="identity-row" onClick={() => login(demo.id)}><span className="avatar">{demo.first_name[0]}</span><span><strong>{demo.first_name}</strong><small>UT Austin student</small></span><ArrowUpRight size={16} /></button>) : <p className="modal-copy">Demo users are loading…</p>}</div></Modal>}
     {showTopic && <Modal title="What are you studying today?" onClose={() => setShowTopic(false)}><p className="modal-copy">A topic helps us find a useful match. You can skip this for now.</p><div className="topic-input"><BookOpen size={18} /><input autoFocus value={topic} onChange={(event) => setTopic(event.target.value)} placeholder="e.g. organic chemistry" onKeyDown={(event) => event.key === 'Enter' && saveTopic()} /></div><div className="modal-actions"><button className="quiet-button" onClick={() => { setShowTopic(false); setNotice('Topic skipped') }}>Skip for now</button><button className="primary-button" onClick={saveTopic}>Save topic <Check size={16} /></button></div></Modal>}
     {showSearch && <Modal title="Find someone studying nearby" onClose={() => setShowSearch(false)}><p className="modal-copy">We’ll look for a real host in the same subject group. No names appear until you both accept.</p><div className="search-topic"><label>Subject</label><strong>{user?.topic || 'Anything goes'}</strong><span>Same course first, related topics second</span></div><div className="modal-actions"><button className="quiet-button" onClick={() => setShowSearch(false)}>Not now</button><button className="primary-button" onClick={startSearch}>{searching ? 'Searching...' : 'Start looking'} <Send size={15} /></button></div></Modal>}
     {notice && <div className="toast"><Check size={15} />{notice}</div>}
