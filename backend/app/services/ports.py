@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from contextlib import AbstractContextManager
-from datetime import datetime
+from datetime import datetime, timedelta
 from enum import StrEnum
 from typing import Protocol
 
@@ -22,6 +22,10 @@ from app.domain.types import (
     Topic,
     User,
 )
+
+
+class Conflict(Exception):
+    """A uniqueness rule in the store rejected the write (e.g. one active search per seeker)."""
 
 
 class Lock(StrEnum):
@@ -140,6 +144,7 @@ class Tx(Protocol):
     def match(self, match_id: str, lock: Lock = Lock.NONE) -> Match | None: ...
     def active_match_for_session(self, session_id: str) -> Match | None: ...
     def active_match_for_seeker(self, user_id: str) -> Match | None: ...
+    def match_for_search(self, search_id: str) -> Match | None: ...
 
     # Safety
     def insert_block(self, user_id: str, blocked_user_id: str) -> None: ...
@@ -176,7 +181,8 @@ class Repository(Protocol):
     def ping(self) -> bool: ...
 
     def history(
-        self, building_id: str, since: datetime, until: datetime
+        self, building_id: str, since: datetime, until: datetime, offline: timedelta
     ) -> list[tuple[datetime, float]]:
-        """Hourly average open seats over [since, until) from a building's readings (FR-49)."""
+        """Hourly average open seats over [since, until) from a building's change-only readings
+        (FR-49). A real seat's last state ends at `last_seen + offline` (state unknown after)."""
         ...
