@@ -4,9 +4,11 @@ Session log. Concrete changes, commands and observed results only.
 
 ## Current status
 
-- **Milestone:** documentation v1.1 complete; B0, F0 and H0 are next (PLAN.md).
-- **Code:** none yet.
-- **Open questions:** Q2, Q12, Q13, U1, U2, U3 (PLAN.md).
+- **Milestone:** backend B0–B5 built and verified locally on Postgres 16 + TimescaleDB 2.31.
+  Remaining backend steps wait on other roles or unknowns (PLAN: H0 hand-off, U3 deploy,
+  U1 Muse, IC1–IC3).
+- **Tests:** 177 pass with Postgres (`make test-db`); 150 pass and 27 skip without it.
+- **Open questions:** Q2, U1, U2 (Tiger Data connection limit), U3 (PLAN).
 
 ---
 
@@ -80,3 +82,115 @@ A cross-reference script was run over the five docs.
 ### Not verified
 - No code exists yet.
 - These remain unknown until B0 and B2: Timescale Toolkit availability on Tiger Data (U2), Muse access (U1) and the deploy host (U3).
+
+## 2026-10-24/25 — Session 3: backend B0–B5
+
+### Environment (observed)
+- **Docker Hub pulls kept failing** from Docker Desktop's VM (`Retrying` on one layer, auth EOF)
+  while the same endpoints answered 200 from macOS. The `timescale/timescaledb-ha:pg16` image
+  (3.24 GB, TimescaleDB 2.31.0, Toolkit 1.26.0) eventually arrived on a retry.
+- **The Homebrew fallback is impossible on this Mac.** `postgresql@18` has no bottle for this
+  configuration ("Tier 3") and the source build stops with "Your Command Line Tools (CLT) does
+  not support macOS 14".
+- **Alpine's `timescaledb` apk targets Postgres 18**, so it cannot load into
+  `postgres:16-alpine`.
+
+### What was built (commits `6f00e54`..`2b3040e` on `v1backend`)
+- **B0:** uv project, config with fail-fast validation, every §7 route registered from day one,
+  schema, seed (placeholder demo-table ids, Q2).
+- **B1–B4:**
+  - Pure domain: seat engine, simulation, recommendations, matching, lifecycle.
+  - Services with a lifecycle coordinator.
+  - In-memory and Postgres repositories under one conformance suite.
+  - Change-only ingest, ETag map snapshots, history.
+  - Host, search and match flows (D15–D25), safety.
+- **B4.5:** outbox, VAPID web push, per-instance worker thread running the scheduler tick and
+  push sender.
+- **B5:**
+  - Failure pass.
+  - Path-id bounds.
+  - Read/write split proven with a SELECT-only role.
+  - 503 on outage.
+  - `DB_POOL_SIZE` budget.
+  - Load check; `pip-audit` clean.
+- **Scripts:** `fake_node`, `seed_history`, `seat_qr`, `vapid_keys`, `load_check`, `db`.
+- **Docs:**
+  - REQUIREMENTS §6/§7/§8 additions found during the build.
+  - ARCHITECTURE §2/§3/§10/§11.
+  - PLAN ticks and decisions D33–D35.
+  - `backend/README.md`.
+- `b2a9309 test` is the author's own commit of the load-generator change, pushed to
+  `origin/v1backend` during a pause. It contains only `scripts/load_check.py`.
+
+### Bugs (cause → fix; each fix is its own commit)
+1. **History intervals ran past the change that ended them** (in `a32a6a4`, fixed in
+   `a3c2fe6`).
+   - Cause: a `WHERE is_open` in the same CTE as `lead()`. SQL evaluates `WHERE` before window
+     functions, so `lead()` never saw the closing row.
+   - Confirmed with a two-row query before changing code.
+2. **Empty history hours counted as fully open** (`a32a6a4` → `e5285da`).
+   - Cause: Postgres `LEAST`/`GREATEST` ignore NULLs, so the LEFT JOIN's NULL interval became a
+     whole hour.
+   - Fix: `FILTER (WHERE iv.start_at IS NOT NULL)`.
+3. **With `FRONTEND_DIST` set, unknown `/api/*` paths returned `index.html` with 200**
+   (`85ab732` documents it as a strict xfail; `2372d5e` fixes it).
+4. **Pools overran the database connection limit** (fixed in `d850259`).
+   - Cause: a hard-coded pool of 10 per process × 4 workers against the image's
+     `max_connections = 25` ("too many clients").
+   - Fix: the `DB_POOL_SIZE` budget (default 5). Peak under load is exactly 20.
+
+Caught before committing:
+- **`seed_history` would have deleted real readings** in its window. It now only seeds seats
+  that have no readings, and never deletes.
+- **A flow test's timeline was one node tick off.** The engine was right.
+- **Two tests that could not fail** (the full-building recommendation and the replica split)
+  were rewritten until a mutation made them fail.
+
+### Verification
+- **`make test-db`:** 177 passed; `make check` green (ruff, mypy `--strict` on 59 files).
+- **Mutations, each failing at least one test and then restored:**
+  - a bag counts as presence (9 failures);
+  - simulated hosts receive requests (1);
+  - the cascade crosses groups (1, after adding the missing test);
+  - the ghost timer uses `>` instead of `>=` (1);
+  - `max_hosts` uses `>` (1);
+  - no `FOR UPDATE` in the send step (8 concurrent advances: 7 `Conflict` errors);
+  - writes routed through the replica pool (2).
+- **Live quick start:**
+  - `make sync db-up db-create db-init seed policies seed-history dev` against a fresh
+    database.
+  - `make fake-node`: LED green → red → yellow, and the map showed `likely_opening` after
+    `GHOST_S` with two server instances.
+  - `make qr` wrote 2 codes.
+- **Load:** 500 polling clients plus 50 nodes posting every 2 s, 60 s × 3 runs, 4 server
+  workers, generator split over 4 processes. Apple M1, 8 GB, macOS 14.6.1; Postgres in Docker
+  (4 CPUs, 1.94 GB).
+
+  | Endpoint | p50 | p95 | max |
+  |---|---|---|---|
+  | `GET /api/buildings/pcl` | 2.7–2.8 ms | 15–36 ms | 231–901 ms |
+  | `GET /api/buildings` | 3.1–3.2 ms | 34–78 ms | 315–1064 ms |
+  | `POST /api/readings` | 35–37 ms | 113–232 ms | 289–1012 ms |
+
+  - About 355 requests/s (the full offered load).
+  - One transport error in about 21,000 requests, in the first run.
+  - The earlier runs (p95 above 1 s) measured the single-process generator: 70% CPU against
+    7–17% per server worker and 19% for Postgres.
+- **Database down:** `/api/health` → `{"ok": true, "db": false}` in 2 s; other endpoints → 503
+  `database_unavailable` with `Retry-After: 5` in at most 5 s.
+- **`pip-audit`** on the locked runtime dependencies: no known vulnerabilities.
+
+### Not verified
+- **Deployment (U3) and Tiger Data (U2):** its connection limit, and the jobs and policies on
+  the managed service.
+- **Web push to real browsers:** only the notifier double and VAPID signing were exercised.
+- **Muse Spark (U1):** not built; every AI call uses the fallback.
+- **Real hardware and the real seat ids (Q2/H0); frontend integration (IC1–IC3).**
+
+## Next steps
+1. **Frontend integration (IC1).** The partner merges `origin/v1backend` into their branch and
+   points the Vite proxy at `make dev`.
+2. **H0:** the hardware pair's node and seat ids replace the placeholders in `sql/seed.sql`.
+3. **U3:** choose a host. Set `DB_POOL_SIZE` against the database limit, `COOKIE_SECURE=true`,
+   `FRONTEND_DIST`. Run `make policies` on Tiger Data, then `make qr ORIGIN=…`.
+4. **U1:** add the `MuseAI` adapter behind `TopicAI` once access exists.
