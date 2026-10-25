@@ -37,7 +37,7 @@ INSERT INTO users (id, first_name, is_demo) VALUES
 """
 
 
-def test_database_url() -> str | None:
+def db_url_for_tests() -> str | None:
     return os.environ.get("TEST_DATABASE_URL")
 
 

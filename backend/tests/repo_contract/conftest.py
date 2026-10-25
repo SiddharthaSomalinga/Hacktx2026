@@ -7,7 +7,7 @@ import pytest
 from app.adapters.repo_postgres import PostgresRepository
 from app.services.ports import Repository
 from tests.fakes import InMemoryRepository
-from tests.pg import reset, test_database_url
+from tests.pg import db_url_for_tests, reset
 from tests.world import build_world
 
 
@@ -19,7 +19,7 @@ def repo(request: pytest.FixtureRequest) -> Iterator[Repository]:
         build_world(mem)
         yield mem
         return
-    url = test_database_url()
+    url = db_url_for_tests()
     if url is None:
         pytest.skip("TEST_DATABASE_URL not set")
     reset(url)
