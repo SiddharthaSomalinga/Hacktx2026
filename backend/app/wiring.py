@@ -27,7 +27,9 @@ def build_ai(settings: Settings) -> TopicAI:
 
 
 def build_services(settings: Settings) -> Services:
-    repo = PostgresRepository(settings.database_url, settings.database_read_url)
+    repo = PostgresRepository(
+        settings.database_url, settings.database_read_url, pool_size=settings.db_pool_size
+    )
     ctx = Context(
         repo=repo,
         ai=build_ai(settings),

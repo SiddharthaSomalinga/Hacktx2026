@@ -26,6 +26,9 @@ class Settings(BaseSettings):
     frontend_dist: str | None = None
     cookie_secure: bool = False
     worker_enabled: bool = True
+    # Connections per pool per process. Budget: processes x instances x pools x this value must
+    # stay under the database's max_connections (25 in the local Timescale image).
+    db_pool_size: int = Field(5, gt=0, le=50)
 
     # Thresholds, seconds unless named otherwise.
     ghost_s: int = Field(30, gt=0)

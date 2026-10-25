@@ -682,7 +682,7 @@ class PostgresTx:
 
 
 class PostgresRepository:
-    def __init__(self, url: str, read_url: str | None = None, *, pool_size: int = 10) -> None:
+    def __init__(self, url: str, read_url: str | None = None, *, pool_size: int) -> None:
         self._primary = make_pool(url, max_size=pool_size, name="primary")
         self._replica: ConnectionPool[Connection[TupleRow]] | None = (
             make_pool(read_url, max_size=pool_size, name="replica") if read_url else None

@@ -8,7 +8,7 @@ from psycopg_pool import ConnectionPool
 
 
 def make_pool(
-    url: str, *, max_size: int = 10, name: str = "primary"
+    url: str, *, max_size: int, name: str = "primary"
 ) -> ConnectionPool[Connection[TupleRow]]:
     pool: ConnectionPool[Connection[TupleRow]] = ConnectionPool(
         url,
