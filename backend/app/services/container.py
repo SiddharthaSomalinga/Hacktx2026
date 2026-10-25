@@ -44,6 +44,7 @@ class Services:
         ctx = replace(ctx, ai=GuardedAI(ctx.ai))  # NFR-3 for every caller
         lifecycle = LifecycleService(ctx)
         topics = TopicsService(ctx)
+        requests = RequestService(ctx, lifecycle)
         return Services(
             ctx=ctx,
             lifecycle=lifecycle,
@@ -54,9 +55,9 @@ class Services:
             auth=AuthService(ctx, lifecycle),
             host=HostService(ctx, lifecycle, topics),
             search=SearchService(ctx, lifecycle, topics),
-            requests=RequestService(ctx, lifecycle),
+            requests=requests,
             match=MatchService(ctx, lifecycle),
             safety=SafetyService(ctx),
             push=PushService(ctx),
-            scheduler=SchedulerService(ctx, lifecycle),
+            scheduler=SchedulerService(ctx, lifecycle, requests),
         )

@@ -518,6 +518,21 @@ Caught before committing:
   phone, Lighthouse/CDP installability. No Playwright suite is committed; the flows above ran
   from a scratch script.
 
+### Demo hosts (D56)
+- `make seed-demo`: 24 hosts added, 0 on a second run. With `DEMO_HOSTS=true`: "physics
+  mechanics", "psych 301", "stats" each found a joinable host; "macro econ" → join → matched
+  with Skyler (Economics) within 9 s. New test: accepts only after the delay; the match
+  survives 600 s with no sensor. `make check` passes.
+
+### Deploy on Vultr (D57)
+- Both servers: Ubuntu 24.04, swap, ufw 80/443, `provision.sh`, Caddy 2.6.2; `/etc/ghostseats.env`
+  from the local `.env` plus `COOKIE_SECURE=true`, `DEMO_HOSTS=true`. Built and started
+  `df12bef` on each: `{"ok":true,"db":true}` (Tiger reachable from Vultr).
+- Tiger, from server 1: `schema.sql`, `seed.sql`, policies, `seed_demo_hosts` (24 added).
+- `https://64.177.55.143.sslip.io` and `https://45.32.219.190.sslip.io`: valid certificates,
+  200. Live check: "macro econ" → join → matched with Skyler in under 10 s, Muse icebreaker,
+  card image 200.
+
 ## Next steps
 1. **Tiger migration (before any deploy of `v1final`):** on a hotspot, from `backend/`, run
    `make db-init seed`. This adds `users.major` and seeds the majors (D43).
