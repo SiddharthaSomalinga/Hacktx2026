@@ -129,7 +129,7 @@
 }
 
 .theme:has(input:checked) {
-  border-color: var(--ink);
+  border-color: var(--accent);
   background: var(--surface-2);
 }
 

@@ -2,9 +2,9 @@
  * Design tokens (D45, D47). Every color, size, space, radius, shadow and duration in the app comes
  * from here. The map style reads the same variables at runtime, so the two never drift.
  *
- * Seat states follow FR-7: open green, occupied red, likely opening ochre, offline grey.
- * The accent (burnt orange) marks primary actions only — never seats or charts, where it would be
- * confused with occupied red. "For you" blue marks the recommended or assigned seat (FR-12).
+ * Seat states (D54): open green, occupied blue, likely opening yellow, offline grey.
+ * Burnt orange is the brand: primary actions, section labels, active controls, the drafting
+ * frame, and the recommended or assigned seat ("for you", FR-12), which no seat state shares.
  */
 
 :root {
@@ -59,18 +59,18 @@
   --accent: #bf5700;
   --accent-ink: #ffffff;
   --accent-text: #9a4600;
-  --focus: #2557d6;
+  --focus: #1c1a17;
 
   --open: #1e8a4c;
   --open-fill: #dff0e5;
-  --occupied: #b42318;
-  --occupied-fill: #b42318;
-  --likely: #8f5f00;
-  --likely-fill: #f7e6a6;
+  --occupied: #2557c9;
+  --occupied-fill: #2557c9;
+  --likely: #8a6a00;
+  --likely-fill: #f6e9a8;
   --offline: #8b857b;
   --offline-fill: #ebe7df;
-  --foryou: #2557d6;
-  --foryou-fill: #e3eafc;
+  --foryou: #bf5700;
+  --foryou-fill: #f8e8da;
   --danger: #b42318;
 
   /* FR-8 building colors (open share) */
@@ -101,18 +101,18 @@
     --accent: #e8772e;
     --accent-ink: #12110f;
     --accent-text: #f09257;
-    --focus: #7ea4ff;
+    --focus: #efebe4;
 
     --open: #4cc07a;
     --open-fill: #183324;
-    --occupied: #f0645a;
-    --occupied-fill: #e0544a;
-    --likely: #e3b341;
-    --likely-fill: #3a3018;
+    --occupied: #6f9bff;
+    --occupied-fill: #5a87ec;
+    --likely: #e6c447;
+    --likely-fill: #363016;
     --offline: #77716a;
     --offline-fill: #26241f;
-    --foryou: #7ea4ff;
-    --foryou-fill: #1d2742;
+    --foryou: #f0843c;
+    --foryou-fill: #33221a;
     --danger: #f0645a;
 
     --share-high: #4cc07a;
@@ -142,18 +142,18 @@
   --accent: #e8772e;
   --accent-ink: #12110f;
   --accent-text: #f09257;
-  --focus: #7ea4ff;
+  --focus: #efebe4;
 
   --open: #4cc07a;
   --open-fill: #183324;
-  --occupied: #f0645a;
-  --occupied-fill: #e0544a;
-  --likely: #e3b341;
-  --likely-fill: #3a3018;
+  --occupied: #6f9bff;
+  --occupied-fill: #5a87ec;
+  --likely: #e6c447;
+  --likely-fill: #363016;
   --offline: #77716a;
   --offline-fill: #26241f;
-  --foryou: #7ea4ff;
-  --foryou-fill: #1d2742;
+  --foryou: #f0843c;
+  --foryou-fill: #33221a;
   --danger: #f0645a;
 
   --share-high: #4cc07a;

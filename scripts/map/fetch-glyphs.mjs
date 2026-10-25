@@ -5,7 +5,7 @@ import { OUT } from './campus.mjs'
 
 const BASE = 'https://raw.githubusercontent.com/protomaps/basemaps-assets/COMMIT/fonts'
 const STACKS = { 'noto-sans-regular': 'Noto Sans Regular', 'noto-sans-medium': 'Noto Sans Medium' }
-const RANGES = ['0-255', '256-511', '8192-8447']
+const RANGES = ['0-255', '256-511', '512-767', '768-1023', '7680-7935', '8192-8447', '8448-8703']
 
 const commit = process.argv[2]
 if (!commit) throw new Error('usage: fetch-glyphs.mjs <basemaps-assets commit sha>')
