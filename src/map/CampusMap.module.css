@@ -129,7 +129,7 @@
   padding: 2px var(--s-2);
   border-radius: var(--r-full);
   background: var(--foryou);
-  color: var(--paper);
+  color: var(--accent-ink);
   font-size: var(--t-xs);
   font-weight: var(--w-medium);
 }

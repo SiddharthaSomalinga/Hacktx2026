@@ -28,23 +28,23 @@
 /* Drafting frame and grid bubbles */
 .frame {
   fill: none;
-  stroke: var(--line-2);
+  stroke: color-mix(in srgb, var(--accent) 55%, var(--line));
   stroke-width: 1;
 }
 
 .gridLine {
-  stroke: var(--grid);
+  stroke: color-mix(in srgb, var(--accent) 18%, var(--grid));
   stroke-width: 1;
   stroke-dasharray: 2 4;
 }
 
 .bubble {
   fill: var(--paper);
-  stroke: var(--line-2);
+  stroke: var(--accent);
 }
 
 .bubbleText {
-  fill: var(--ink-2);
+  fill: var(--accent-text);
   font-family: var(--font-mono);
   font-size: 10px;
   text-anchor: middle;
@@ -242,7 +242,7 @@
   padding: 2px var(--s-2);
   border-radius: var(--r-full);
   background: var(--foryou);
-  color: var(--paper);
+  color: var(--accent-ink);
   font-size: var(--t-xs);
   font-weight: var(--w-medium);
   white-space: nowrap;
