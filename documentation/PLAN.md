@@ -512,3 +512,15 @@ Pi bridge use this URL, so it is fixed before `make qr` runs.
 `v1hardsoft` (which contains `v1` and `v1frontend`) + `Arduino/Transmitter-Code`, plus the
 D39 clean-up. It deploys with `FRONTEND_DIR=.` while the frontend sits at the repo root (D6
 is the partner's call). Once it runs on the servers, `main` fast-forwards to it.
+
+**D41 — Every database wait is bounded (`DB_TIMEOUT_S`, default 5).**
+- **The gap.** D35 promised a 503 within 5 s, but that held only when connections were
+  refused. With a paused database, the connection stays open and the server never replies, so
+  `/api/health` and every query hung indefinitely. The live e2e run found it.
+- **The bound.** `BoundedConnection.wait()` passes a timeout to every server round trip
+  (queries, `BEGIN`, `COMMIT`). libpq's `connect_timeout` covers new connections, and the same
+  value is the pool wait.
+- **On a timeout,** the connection is closed so the pool discards it. The error is an
+  `OperationalError`, so it maps to `Unavailable` and a 503.
+- **Why per round trip and not per checkout.** The outbox drain holds a transaction across
+  push HTTP calls; a checkout deadline would roll back sent marks and resend notifications.

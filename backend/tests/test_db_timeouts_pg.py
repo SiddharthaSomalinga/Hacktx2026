@@ -32,38 +32,44 @@ class FreezableProxy:
         self.listener = socket.create_server(("127.0.0.1", 0))
         self.port = self.listener.getsockname()[1]
         self.sockets: list[socket.socket] = []
+        self.lock = threading.Lock()
+        self.closed = False
         threading.Thread(target=self._accept, daemon=True).start()
 
     def _accept(self) -> None:
         while True:
             try:
                 client, _ = self.listener.accept()
+                server = socket.create_connection(self.upstream)
             except OSError:
                 return
-            server = socket.create_connection(self.upstream)
-            self.sockets += [client, server]
+            with self.lock:
+                if self.closed:
+                    client.close()
+                    server.close()
+                    return
+                self.sockets += [client, server]
             for src, dst in ((client, server), (server, client)):
                 threading.Thread(target=self._pump, args=(src, dst), daemon=True).start()
 
     def _pump(self, src: socket.socket, dst: socket.socket) -> None:
-        while True:
-            try:
-                data = src.recv(65536)
-            except OSError:
-                return
-            if not data:
-                return
-            while self.frozen.is_set():  # hold the bytes: the peer sees a server that never replies
-                time.sleep(0.05)
-            try:
+        try:
+            while data := src.recv(65536):
+                while self.frozen.is_set():  # hold the bytes: a server that never replies
+                    time.sleep(0.05)
                 dst.sendall(data)
-            except OSError:
-                return
+        except OSError:
+            pass
+        finally:  # one side hung up: end the pair
+            src.close()
+            dst.close()
 
     def close(self) -> None:
         self.frozen.clear()
-        for s in [self.listener, *self.sockets]:
-            s.close()
+        with self.lock:
+            self.closed = True
+            for s in [self.listener, *self.sockets]:
+                s.close()
 
 
 def through(url: str, port: int) -> str:
@@ -84,8 +90,8 @@ def frozen_db() -> Iterator[tuple[PostgresRepository, FreezableProxy]]:
     try:
         yield repo, proxy
     finally:
+        repo.close()  # before the proxy, so the pool does not reconnect through it
         proxy.close()
-        repo.close()
 
 
 def bounded(call: Callable[[], Any]) -> tuple[float, Any]:
@@ -113,7 +119,6 @@ def read_buildings(repo: PostgresRepository) -> object:
         return tx.buildings()
 
 
-@pytest.mark.xfail(strict=True, reason="no client-side bound on a hung database")
 def test_health_reports_a_hung_database_within_the_bound(
     frozen_db: tuple[PostgresRepository, FreezableProxy],
 ) -> None:
@@ -125,7 +130,6 @@ def test_health_reports_a_hung_database_within_the_bound(
     assert elapsed < BOUND_S
 
 
-@pytest.mark.xfail(strict=True, reason="no client-side bound on a hung database")
 def test_a_query_on_a_hung_database_is_unavailable_within_the_bound(
     frozen_db: tuple[PostgresRepository, FreezableProxy],
 ) -> None:
