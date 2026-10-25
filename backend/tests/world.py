@@ -16,6 +16,7 @@ from tests.fakes import InMemoryRepository
 NODE = "n1"
 REAL_SEATS = ["s1", "s2", "s3", "s4"]
 USERS = ["alex", "priya", "jordan", "sam"]
+MAJORS = {"alex": "Biochemistry", "priya": "Chemistry", "jordan": "Computer Science"}
 
 
 def build_world(repo: InMemoryRepository, *, lib_busyness: int = 0) -> None:
@@ -37,5 +38,5 @@ def build_world(repo: InMemoryRepository, *, lib_busyness: int = 0) -> None:
         d.seats[f"x1-s{i}"] = Seat(f"x1-s{i}", "x1", "sim", 2, i, 50, 50, True, None)
     d.nodes[NODE] = None
     for name in USERS:
-        d.users[name] = User(name, name.title(), True)
+        d.users[name] = User(name, name.title(), True, MAJORS.get(name))
     d.users["simhost"] = User("simhost", "Taylor", False)

@@ -4,9 +4,10 @@ Session log. Concrete changes, commands and observed results only.
 
 ## Current status
 
-- **Milestone:** all branches integrated in `v1final` (D40) and verified locally. Remaining:
-  Q14 (demo-table sensors), frontend F3, and the D36 Vultr deploy.
-- **Tests:** 201 pass with Postgres (`make test-db`); 174 pass and 27 skip without it.
+- **Milestone:** all branches integrated in `v1final` (D40); the two-phone flow works in the
+  browser with live Muse (Session 7). Remaining: the Tiger migration for D43, Q14 (demo-table
+  sensors), and the D36 Vultr deploy.
+- **Tests:** 205 pass with Postgres (`make test-db`); 174 pass and 29 skip without it. Live e2e: 114/114 (Session 6).
 - **Open questions:** Q14 (PLAN). Q2, U1, U2 and U3 resolved.
 
 ---
@@ -339,13 +340,128 @@ Caught before committing:
 - The frontend in a browser against this backend (only its API calls were replayed).
 - The real Arduino on the bridge, and anything on Vultr.
 
+## 2026-10-25 — Session 6: full e2e on `v1final`, a hang fix, website review
+
+### End to end (`v1final` + this fix, fresh `ghostseats_e2e` database)
+- **Setup:**
+  - Live server with 2 workers and the worker thread, live Muse, short timers.
+  - Fake nodes posting every 0.5 s.
+  - An e2e-only second node with two real tables, so the cascade has more than one real host.
+- **Result: 114/114 checks passed.**
+  - Covers FR-1..54 except FR-10, FR-12 and FR-17, which are client behavior.
+  - Also covered: D30 outbox, D32 ETag, D35 outage, and hostile input.
+  - Phase B (session max 8 s, 1 request/hour) covered FR-27 confirm and FR-34 rate limit.
+- **Harness fixes, not app bugs:**
+  - FR-22 needed `HUMAN_FRESH_S` to pass after a prior person reading.
+  - `REQUEST_TIMEOUT_S=5` was shorter than live Muse ranking plus accept.
+  - FR-52: a user-initiated cancel notifies only the other side (`match.py`, by design). The
+    requirement's "(both)" reads as all participants; the canceller gets no push.
+
+### Bug: requests hung on an unresponsive database (`06cf73c` → `ab4e458`)
+- **Found:** with the database container paused, `/api/health` did not answer in 15 s.
+- **Cause:** `faulthandler` showed the thread in `repo_postgres.py:727 ping → conn.execute →
+  psycopg wait`, on a pooled connection. Nothing bounded a round trip; the pool's 5 s applied
+  only to getting a connection.
+- **Fix (D41):**
+  - `BoundedConnection.wait()` passes `DB_TIMEOUT_S` to every round trip and closes the
+    connection on a timeout.
+  - libpq `connect_timeout` bounds new connections.
+- **Regression tests:** two tests through a freezable TCP proxy. Committed first as strict
+  xfails; they failed with "still blocked after 8 s".
+- **After the fix:** each answers in about 5.0 s (three runs). The original repro returns
+  `False` in 5.0 s. `make test-db`: 203 passed.
+
+### Website review (headless Chromium, 375 px and 1280 px)
+- **No console errors, and no horizontal scroll at 375 px.**
+- **Bugs found in the frontend:**
+  - The ☰ button has no handler, and the nav and login are hidden under 800 px, so a phone
+    cannot log in, host or open history.
+  - The login map says `Maya: 'u-priya'` while the button shows Priya, so Priya logs in as
+    Alex.
+  - "Start looking" never calls `/join`.
+  - "Save topic" posts to `/host/topic` for every user, which is 409 unless linked.
+  - Host toggle on before link → 409 (D17: link creates the session).
+  - Offline seats are drawn in the "likely vacant" color.
+  - Seat tiles show raw ids.
+  - "1 floors"; PCL has 2.
+
+### Frontend fixes on `v1final` (at the author's request)
+- **`e502f45`:** the ☰ button opens a menu panel (pages, log in or out); the profile chip opens
+  it on desktop.
+- **`32fd470`:** the login picker lists `/api/demo-users` and logs in by id. Before, Priya
+  logged in as Alex.
+- **`3059411`:** the core loop is wired to the API.
+  - Seeker: search → join → poll → match (a cancel is offered while searching).
+  - Host setup per D17: toggle, then link, then topic. The status and hidden reason come from
+    `/me`; mute and confirm work.
+  - Real inbox (Accept / Not now / Mute), replacing the mock "Maya".
+  - Real match view on both sides, with the alt seat, "I'm here" and cancel.
+  - Removed: "Block or report". The match response has no user id to block (FR-45 gap in
+    the UI only).
+- **`c77eead`:** `likely_opening` gets its style; offline seats are grey "No signal" with a
+  count; labels read "T01·2"; building rows show the seat count; the hero space; the header
+  fits at 375 px.
+- **Verified in headless Chromium, two phones at 375 px:**
+  - Alex links `t1-s1` → FINDABLE.
+  - Priya searches → "Asking someone studying CH 320M · 115s left".
+  - Alex's inbox card shows no name → Accept → Alex sees Priya, Priya's phone opens the match
+    with Alex, `t1-s2` and the live icebreaker → "I'm here" → completed.
+  - All 200, no page errors; passed again after the last commit.
+- **Still open:** seat colors (green = occupied in the UI, green = open for LEDs and FR-8) are
+  a team decision. The history chart's orange curve is decorative.
+
+## 2026-10-25 — Session 7: 5-minute requests, name and major before accept (D42, D43)
+
+### Changes
+- **Backend:**
+  - `REQUEST_TIMEOUT_S` 300.
+  - `users.major` (an `ADD COLUMN IF NOT EXISTS` migration) and seeded majors.
+  - Inbox items carry `seeker_first_name`/`seeker_major`.
+  - `GET /api/search/:id` carries `asking {first_name, major}`.
+  - The request push reads "Priya · Chemistry wants to study …".
+  - The match view adds `other_major`.
+  - Muse ranking and icebreakers receive majors through `Topic.major`; names never do.
+- **Tests:**
+  - The old "no names before accept" assertions are replaced by D43's.
+  - Hard-coded 120 s waits now read `request_timeout_s`.
+  - Two Muse tests: majors reach the payload; names and empty majors do not.
+- **Frontend (`v1final`):** the picker shows majors; the seeker strip reads "Asking Alex ·
+  Biochemistry · 4:55 left"; the host card reads "Priya · Chemistry wants to study CH 320M ·
+  Organic Chemistry I"; both match views show the major.
+- **`USER_FLOWS.md` v1.2:** the revisions, plus §3, the connection flow. It covers the sequence
+  across both phones, the backend and Muse, what each side sees per stage, every Muse call
+  with its bound and fallback, and the timers.
+
+### Verification
+- `make check`: 174 passed, 29 skipped. `make test-db`: 205 passed. Ruff and mypy `--strict`
+  clean.
+- **Two phones in headless Chromium at 375 px, live Muse:**
+  - Alex findable.
+  - Priya: "Asking Alex · Biochemistry · 4:55 left".
+  - Alex's card: "Priya · Chemistry wants to study CH 320M · Organic Chemistry I", 4:51 left.
+  - Accept: each match view shows the other's first name and major.
+  - Icebreaker: "Want to team up on Organic Chemistry I mechanisms and share Chemistry and
+    Biochemistry study tricks?"
+  - "I'm here" → completed. All 200.
+
+### Not done
+- **The Tiger migration.** Tiger was unreachable from the venue network. On a hotspot, run
+  `make db-init seed` from `backend/` before deploying this commit.
+- **`make seed` on the e2e database** failed on the e2e-only fixture tables (simulated seats
+  per table); only the users upsert was applied there. Tiger has no such tables.
+
 ## Next steps
-1. **Q14 (team):** a second sensed seat at the demo table, and a person sensor or a changed
+1. **Tiger migration (before any deploy of `v1final`):** on a hotspot, from `backend/`, run
+   `make db-init seed`. This adds `users.major` and seeds the majors (D43).
+2. **Q14 (team):** a second sensed seat at the demo table, and a person sensor or a changed
    demo. Without them the real table cannot host a match or show a ghost seat.
-2. **Frontend F3:** call `POST /api/search/:id/join` after a search.
 3. **Deploy (D36, D37):** the Vultr servers, load balancer and `.tech` DNS; `.env.prod`;
    `make deploy REF=origin/v1final FRONTEND_DIR=.`.
 4. **Hardware pair:** run `bridge/arduino_bridge.py` with `GHOSTSEATS_URL` and `NODE_KEY` set.
    The real key is given to them privately, never committed.
-5. **After the servers work:** fast-forward `main` to `v1final` (D40); print the QR codes for
+5. **Open UI items:**
+   - Block/report needs the other user's id in the match response (FR-45).
+   - Seat colors: the UI uses green = occupied; LEDs and FR-8 use green = open (team).
+   - The history chart's decorative curve.
+6. **After the servers work:** fast-forward `main` to `v1final` (D40); print the QR codes for
    the final domain.

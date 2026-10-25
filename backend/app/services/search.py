@@ -7,14 +7,14 @@ from dataclasses import replace
 from datetime import datetime, timedelta
 
 from app.domain.matching import aggregate, offered_group
-from app.domain.types import Group, RequestStatus, Search, SearchStatus
+from app.domain.types import Group, RequestStatus, Search, SearchStatus, StudyRequest
 from app.services.context import Context
 from app.services.errors import conflict, forbidden, not_found, too_many
 from app.services.facts import Facts
 from app.services.lifecycle import Candidate, LifecycleService, findable_hosts
 from app.services.ports import Conflict, Lock, Tx
 from app.services.topics import TopicsService
-from app.services.views import GroupCountView, SearchStatusView, SearchView
+from app.services.views import GroupCountView, PersonView, SearchStatusView, SearchView
 
 
 def _own(tx: Tx, user_id: str, search_id: str, lock: Lock = Lock.NONE) -> Search:
@@ -121,7 +121,9 @@ class SearchService:
             match = (
                 tx.match_for_search(search_id) if search.status is SearchStatus.MATCHED else None
             )
-            return SearchStatusView(search.status, left, match.id if match else None)
+            return SearchStatusView(
+                search.status, left, match.id if match else None, _asking(tx, pending)
+            )
 
     def cancel(self, user_id: str, search_id: str) -> SearchStatus:
         with self._ctx.repo.tx() as tx:
@@ -133,3 +135,12 @@ class SearchService:
                 tx.update_request(replace(pending, status=RequestStatus.CANCELLED))
             tx.update_search(replace(search, status=SearchStatus.CANCELLED))
             return SearchStatus.CANCELLED
+
+
+def _asking(tx: Tx, pending: StudyRequest | None) -> PersonView | None:
+    """The host holding the pending request, as the seeker may see them before accept (D43)."""
+    if pending is None:
+        return None
+    session = tx.session(pending.host_session_id)
+    host = tx.user(session.user_id) if session else None
+    return PersonView(host.first_name, host.major) if host else None

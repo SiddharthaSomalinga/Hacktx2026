@@ -79,7 +79,7 @@ and an import-guard test enforces that.
 | `domain/lifecycle.py` | `advance_host_session`, `advance_search`, `advance_match`; they return step objects (§6) | FR-25..27, 31..35, 41, 42 |
 | `domain/catalog.py` | UT course codes → title and subject; keyword aliases | FR-18, 19 |
 | `domain/topic_rules.py` | Fallback normalizer, fallback icebreaker, `card_key_for` | §9 |
-| `domain/notifications.py` | Which transition emits which outbox `kind` and payload (no names before accept) | FR-52, 53 |
+| `domain/notifications.py` | Which transition emits which outbox `kind` and payload (first name and major only before accept, D43) | FR-52, 53 |
 | `services/ports.py` | `Repository`, `TopicAI`, `Notifier`, `Clock` protocols | — |
 | `services/lifecycle.py` | Applies `advance_*` decisions under row locks; the one place where host, search and match transitions trigger each other | NFR-2, D29 |
 | `services/facts.py` | Per-transaction snapshot answering "what state is this seat" and "is this host findable", identically for every service | FR-24 |

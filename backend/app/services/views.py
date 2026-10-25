@@ -78,15 +78,26 @@ class SearchView:
 
 
 @dataclass(frozen=True)
+class PersonView:
+    """First name and major: all either side sees before accept (D43)."""
+
+    first_name: str
+    major: str | None
+
+
+@dataclass(frozen=True)
 class SearchStatusView:
     status: SearchStatus
     seconds_left: int
     match_id: str | None
+    asking: PersonView | None = None  # the host holding the pending request
 
 
 @dataclass(frozen=True)
 class InboxItemView:
     request_id: str
+    seeker_first_name: str
+    seeker_major: str | None
     course_label: str
     table_label: str
     seconds_left: int
@@ -97,6 +108,7 @@ class MatchView:
     status: MatchStatus
     role: str
     other_first_name: str
+    other_major: str | None
     building: str
     floor: int
     table_label: str

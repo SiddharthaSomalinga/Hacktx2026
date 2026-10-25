@@ -125,6 +125,7 @@ class HistoryPoint(Strict):
 class DemoUser(Strict):
     id: str
     first_name: str
+    major: str | None = None
 
 
 class LoginIn(Strict):
@@ -172,10 +173,16 @@ class SearchOut(Strict):
     related: list[GroupCount]
 
 
+class Person(Strict):
+    first_name: str
+    major: str | None
+
+
 class SearchStatusOut(Strict):
     status: SearchStatus
     seconds_left: int
     match_id: str | None = None
+    asking: Person | None = None  # D43: the host holding the pending request
 
 
 class SearchCancelOut(Strict):
@@ -226,6 +233,8 @@ class ConfirmOut(Strict):
 
 class InboxItem(Strict):
     request_id: str
+    seeker_first_name: str
+    seeker_major: str | None
     course_label: str
     table_label: str
     seconds_left: int
@@ -250,6 +259,7 @@ class MatchOut(Strict):
     status: MatchStatus
     role: Literal["host", "seeker"]
     other_first_name: str
+    other_major: str | None
     building: str
     floor: int
     table_label: str
