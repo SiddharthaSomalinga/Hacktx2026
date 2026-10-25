@@ -333,25 +333,22 @@ class TopicAI(Protocol):                     # services/ports.py
 - **Host (D36, D37).** Two Vultr Cloud Compute instances in New Jersey behind a Vultr Load Balancer (Auto SSL, health check `GET /api/health`), on a `.tech` domain whose DNS is on Vultr. Deploys roll one instance at a time. Fallback: a laptop behind a `cloudflared` tunnel.
 - **Network.** The Pi and the phones use the public URL. A phone hotspot is the backup network.
 
-## 12. Frontend integration map (frontend role)
+## 12. Frontend architecture (v2, `v2-frontendredo`, D44–D52)
 
-| Today (`src/main.jsx` mock) | Replace with | Notes |
+React 19, TypeScript strict, Vite 8, at the repo root (D6). One `src/api/client.ts` makes every
+request: same origin, cookies, `cache: 'no-store'`, `{error, message}` → `ApiError`, and an ETag
+store that sends `If-None-Match` on the two buildings endpoints. API types are generated from the
+live OpenAPI (`npm run api:types` → `src/api/schema.gen.ts`).
+
+| Layer | Where | Rule |
 |---|---|---|
-| `buildings` constant | `GET /api/buildings`, polled | The mock's `likely` key → API `likely_opening`, mapped once in `src/api.js`. `short`, `accent`, `note` stay frontend-only, keyed by building id |
-| `initialSeats` + 9 s fake toggle | `GET /api/buildings/:id` every `POLL_WEB_S` with `If-None-Match` | Shape in REQUIREMENTS §7 |
-| Hardcoded recommendation card | `GET /api/recommend?building_id&floor&table_id` | Pulsing outline (FR-12); message per `level` |
-| "Demo login picker coming next" | `GET /api/demo-users`, `POST /api/login`, `GET /api/me`, `POST /api/logout` | `/me` restores state after reload |
-| `handleTopicSubmit` fake normalizer | `POST /api/search` | Quick login keeps the typed topic (FR-18). Shows `label`, groups, Join only if `has_real_hosts`, and the two empty states |
-| `requestMatch` toast | `POST /api/search/:id/join`, poll `GET /api/search/:id` | "No one's free right now" on `exhausted`; optional related retry (FR-54) |
-| Host toggle | Host setup: toggle (client) → link → `POST /api/host/topic` | Host panel: `hidden_reason`, mute/unmute, confirm prompt (`POST /api/host/confirm`) |
-| — | Inbox cards: Accept / Not now / Mute | `GET /api/host/inbox`, `/accept`, `/decline {mute}` |
-| — | Match view (both roles), "I'm here", cancel, block, report | `GET /api/matches/:id` incl. `alt_seat_id`; `/arrived`, `/cancel`, `/api/block`, `/api/report` |
-| — | Route `/seat/:seat_id` | Opened by the seat QR codes; starts linking |
-| — | History chart | `GET /api/buildings/:id/history` |
-| — | PWA: manifest, icons, service worker, push opt-in | `GET /api/push/vapid-public-key`, `POST/DELETE /api/push/subscribe`. The service worker never caches `/api`. iOS "Add to Home Screen" hint (FR-51) |
-
-All `fetch` calls go through one `src/api.js`. It sends cookies, turns
-`{error, message}` bodies into thrown errors, and handles `304`.
+| Routes | `src/app/router.tsx`, `paths.ts` | Every step has a URL: `/`, `/b/:id/:floor/:table`, `/b/:id/history`, `/login`, `/find`, `/search/:id`, `/seat/:id`, `/seat/:id/host`, `/host`, `/match/:id`. Push and QR links land on them |
+| Canvas | `src/app/Canvas.tsx`, `focus.tsx` | One canvas stays mounted; each route declares a focus (campus or a floor plan with marks). The docked panel shows the route |
+| Data | `src/api/queries.ts`, `poll.ts`, `freshness.ts` | TanStack Query. Polls every `POLL_WEB_S`, paused while hidden, ×2 backoff to 30 s, never sooner than `Retry-After`. Freshness comes from the last successful poll, never a per-seat time (FR-6) |
+| Campus map | `src/map/` | MapLibre on a self-hosted Protomaps extract (`public/map/`), style built from the CSS tokens. Footprints are OSM outlines keyed by building id, drawn as an SVG overlay colored by FR-8 (D51) |
+| Floor plan | `src/plan/` | Tables at x/y, chairs by position, one uniform scale with no overlap. State by shape and color (D45). Real buttons over an `aria-hidden` SVG |
+| PWA | `src/sw/sw.ts`, `public/manifest.webmanifest` | Workbox precache of the shell, fonts, tiles, glyphs, cards, icons. **Never caches `/api`.** Notification clicks are allow-listed to `/host`, `/match/:id`, `/search/:id` |
+| Offline | `src/app/App.tsx` | Only the public buildings queries persist to localStorage, so an offline reopen shows the last map with its age |
 
 ## 13. Contract deltas
 

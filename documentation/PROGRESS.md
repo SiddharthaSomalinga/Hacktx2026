@@ -485,6 +485,39 @@ Caught before committing:
   `label`, `offered_group`. REQUIREMENTS §7 and ARCH §13 updated.
 - `make check`: ruff, mypy clean, 182 passed, 29 skipped. `make test-db`: 211 passed.
 
+### Frontend v2 on `v2-frontendredo` (worktree `../Hacktx2026-v2`)
+- **Stack:** React 19.3.1, TypeScript 5.9.3 strict, Vite 8.3.5, React Router 8.5.0, TanStack Query
+  5.104.5, MapLibre 6.15.0, vite-plugin-pwa 2.0.0 (injectManifest), IBM Plex via @fontsource
+  5.3.0, Vitest 5.0.5. Pinned exactly (`.npmrc`). TypeScript 7 was skipped: openapi-typescript
+  7.13 requires TypeScript 5.
+- **Map assets:** 30 tiles (z12–15, 2.9 MB) from Protomaps build 20261024, glyphs from
+  basemaps-assets@028c18f, footprints for pcl/wel/gdc from the tiles' `buildings` layer.
+  Overpass returned 502 and then timed out from the venue network, so outlines come from the
+  tiles instead (`npm run map:footprints`).
+- **Cards:** `make cards` (Muse Image, `POST /v1/images/generations`, `output_format: png`):
+  9 images, reviewed for people and text, resized to 960 px (110–265 KB).
+- **Verified (local DB, backend serving `dist/`, headless Chromium):**
+  - Two browsers: host from `/seat/t1-s1` → login → link → topic → findable; seeker types a
+    topic → login keeps it → "CH 320M · Organic Chemistry I" with counts on the map → join →
+    host card "Priya · Chemistry" → accept → both match views (live Muse icebreaker) → "I'm
+    here". A stand-in node posted readings for `t1-s1`/`t1-s2`.
+  - Offline: after one visit, an offline reload renders the shell, tiles and last counts;
+    the pill reads "Offline · data from N s ago"; no `/api` response came from the service worker.
+  - axe on `/`, a floor, a table, history, login and a seat, light and dark: no violations.
+  - `npm run typecheck`, `npm run build`, `npx vitest run` (32 tests) pass.
+  - `make image FRONTEND_DIR=.` builds; the container serves deep links, `sw.js`, the
+    manifest, tiles, cards and the MapLibre worker (200, JavaScript).
+- **Bugs found and fixed:**
+  - Seeded camera clamped north: MapLibre keeps the view inside `maxBounds`, and with half the
+    screen under the panel the view needed area south of the extract → wider extract.
+  - First visit reloaded the page: Workbox fires `controlling` on the first install too →
+    reload only when `event.isUpdate` (`822c242` → `59f7778`).
+  - `workbox-window` threw when service workers were unavailable → caught (`ccd117c`).
+  - Map markers failed axe label-in-name → visible text plus a hidden description (`09c7dbc`).
+- **Not verified:** real iOS and Android devices, installed PWA, a push reaching a locked
+  phone, Lighthouse/CDP installability. No Playwright suite is committed; the flows above ran
+  from a scratch script.
+
 ## Next steps
 1. **Tiger migration (before any deploy of `v1final`):** on a hotspot, from `backend/`, run
    `make db-init seed`. This adds `users.major` and seeds the majors (D43).
@@ -494,9 +527,8 @@ Caught before committing:
    `make deploy REF=origin/v1final FRONTEND_DIR=.`.
 4. **Hardware pair:** run `bridge/arduino_bridge.py` with `GHOSTSEATS_URL` and `NODE_KEY` set.
    The real key is given to them privately, never committed.
-5. **Open UI items:**
-   - Block/report needs the other user's id in the match response (FR-45).
-   - Seat colors: the UI uses green = occupied; LEDs and FR-8 use green = open (team).
-   - The history chart's decorative curve.
+5. **Frontend v2 (D44):** device pass on a real iPhone and Android phone (install, push to a
+   locked phone); then Q20, whether v2 replaces the frontend on `v1final`. v2 resolves the old UI
+   items (block/report ids, seat colors, the decorative history curve).
 6. **After the servers work:** fast-forward `main` to `v1final` (D40); print the QR codes for
    the final domain.
