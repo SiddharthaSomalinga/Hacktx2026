@@ -20,6 +20,7 @@ Decision numbers refer to `PLAN.md`, decision log.
 - **New:** FR-50 one role at a time (D23) · FR-51–FR-53 push notifications (D28, D30) · FR-54 optional related-subject retry (D19).
 - **NFR-2** Timeouts are evaluated on read/write, on sensor ingest and by one scheduler tick (D29). **NFR-4** Installable PWA (D28). **New NFR-8** horizontal scale (D32).
 - **Found during the build (v1.1, same release):** `label`, `searches.joined_at`, `host_sessions.confirm_notified_at` (§6); `table_not_found`, `seat_taken`, `database_unavailable` (§7); `PUSH_MAX_ATTEMPTS`, `FRONTEND_DIST`, `COOKIE_SECURE`, `WORKER_ENABLED`, `DB_POOL_SIZE` (§8); Q12 values 24 h / 30 days.
+- **D42, D43** Requests wait 5 minutes; first name and major are visible before accept on both sides and in the request push; Muse ranks and writes icebreakers with majors.
 - **§8 (D38, D41)** `MUSE_BASE_URL`, `MUSE_MODEL`, `DB_TIMEOUT_S`.
 - **§6** Adds `buildings.lat/lng`, `keywords`, `offered_group`, change-only `seat_readings` with offline markers, `push_subscriptions` and `notification_outbox`. **§7** New and changed endpoints, node key, error codes. **§8** New keys and an environment table.
 
@@ -116,7 +117,7 @@ occupancy history and push notifications.
 - **FR-33** After `MAX_HOSTS_PER_SEARCH` hosts, or when no untried real host remains in the offered group, the search shall end as exhausted. The seeker shall see "No one's free right now" with seat recommendations. The cascade never moves to the other group.
 - **FR-34** A seeker shall have at most one active search and at most `MAX_REQUESTS_PER_HOUR` requests per hour.
 - **FR-35** A seeker shall be able to cancel a search, withdrawing any pending request.
-- **FR-36** A host's request card shall show only the course and the host's table, with the actions Accept, Not now and Mute. Declines shall be silent to the seeker.
+- **FR-36** A host's request card shall show the seeker's first name and major, the course and the host's table, with the actions Accept, Not now and Mute. Declines shall be silent to the seeker (D43).
 
 ## 4.7 Match lifecycle
 
@@ -134,7 +135,7 @@ occupancy history and push notifications.
 
 ## 4.8 Safety and privacy
 
-- **FR-43** Names shall be shown only after a request is accepted.
+- **FR-43** Before a request is accepted, only a first name and major are shown: the seeker's on the host's request card, and the asked host's on the seeker's waiting screen. Location stays hidden until accept (FR-44) (D43).
 - **FR-44** Location shall be shared only as building, floor, table and seat after acceptance. No live location.
 - **FR-45** Users shall be able to block and report from every request and match view. A report shall also block. Blocks apply in both directions.
 - **FR-46** No images or audio shall be stored.
@@ -163,7 +164,7 @@ occupancy history and push notifications.
   - a confirmation is needed (FR-27) or a session ends (host).
 
   No notification is sent for an alternative seat (FR-39).
-- **FR-53** Notification payloads shall contain no names before a request is accepted (FR-43), and no location beyond building, floor, table and seat (FR-44).
+- **FR-53** Notification payloads shall contain nothing beyond first name and major before a request is accepted (FR-43), and no location beyond building, floor, table and seat (FR-44).
 - **FR-54** *(Optional.)* When a same-course search ends exhausted and related-subject hosts exist, the client may offer "Try people studying related material?". It starts a new search whose offered group is related.
 
 # 5. Non-functional requirements
@@ -192,7 +193,7 @@ occupancy history and push notifications.
 | nodes | id, last_seen |
 | seat_readings | time, seat_id, online, object_present, human_present (time-series, change-only) |
 | seat_state | seat_id, state, candidate_state, candidate_since, state_since, away_since, last_object, last_human, last_seen, blink_until |
-| users | id, first_name, is_demo |
+| users | id, first_name, major (nullable, D43), is_demo |
 | host_sessions | id, user_id, seat_id, topic_raw, course_code, subject, keywords, label, about_me, open, muted, started_at, expires_at, ended_at, end_reason, confirm_notified_at |
 | searches | id, seeker_id, topic_raw, course_code, subject, keywords, label, offered_group, status, tried_session_ids, created_at, joined_at |
 | requests | id, search_id, seeker_id, host_session_id, status, created_at, expires_at |
@@ -232,23 +233,23 @@ JSON over HTTPS. Errors: `{"error": "<code>", "message": "<sentence>"}` with a 4
 | GET /api/buildings/:id | None | | See shape below; supports `ETag` / `If-None-Match` |
 | GET /api/recommend?building_id=&floor=&table_id= | None | `floor`, `table_id` optional | `{seat_id, table_id, floor, kind, level}` with kind `open` or `likely_opening` and level `table`, `floor` or `building`; or `{full: true, nearest_building_id}` |
 | GET /api/buildings/:id/history | None | | `[{hour, open_avg}]` |
-| GET /api/demo-users | None | | `[{id, first_name}]` |
+| GET /api/demo-users | None | | `[{id, first_name, major}]` |
 | POST /api/login | None | `{user_id}` | `{id, first_name}`; sets the session cookie |
 | POST /api/logout | Login | | `{ok}`; clears the cookie |
 | GET /api/me | None | | `{user: {id, first_name} or null, host: {session_id, seat_id, label, muted, status, hidden_reason} or null, search_id or null, match_id or null}`. `status` is `findable` or `hidden`; `hidden_reason` is `needs_topic`, `away`, `muted`, `table_full`, `in_match` or `confirm_pending` |
 | POST /api/search | Login | `{topic_raw, group?}`; `group: "related"` only for FR-54 | `{search_id, label, course_code, subject, offered_group, has_real_hosts, same_course: [{building_id, floor, count}], related: [...]}` |
 | POST /api/search/:id/join | Login | | `{status, seconds_left}` |
-| GET /api/search/:id | Login | | `{status, seconds_left, match_id}` |
+| GET /api/search/:id | Login | | `{status, seconds_left, match_id, asking}`; `asking` is `{first_name, major}` of the host holding the pending request, or null (D43) |
 | POST /api/search/:id/cancel | Login | | `{status}` |
 | POST /api/host/link | Login | `{seat_id}` | `{session_id}` |
 | POST /api/host/topic | Login | `{topic_raw, about_me}` | `{label, course_code, subject}` |
 | POST /api/host/toggle | Login | `{open}` | `{open}`; `open: false` ends the session |
 | POST /api/host/mute | Login | `{muted}` | `{muted}` |
 | POST /api/host/confirm | Login | | `{expires_at}` |
-| GET /api/host/inbox | Login | | `[{request_id, course_label, table_label, seconds_left}]` |
+| GET /api/host/inbox | Login | | `[{request_id, seeker_first_name, seeker_major, course_label, table_label, seconds_left}]` (D43) |
 | POST /api/requests/:id/accept | Login | | `{match_id}` |
 | POST /api/requests/:id/decline | Login | `{mute?}` | `{status}`; `mute: true` also mutes (FR-28) |
-| GET /api/matches/:id | Login | | `{status, role, other_first_name, building, floor, table_label, assigned_seat_id, alt_seat_id, icebreaker, card_url}` |
+| GET /api/matches/:id | Login | | `{status, role, other_first_name, other_major, building, floor, table_label, assigned_seat_id, alt_seat_id, icebreaker, card_url}` |
 | POST /api/matches/:id/arrived | Login | | `{status}` |
 | POST /api/matches/:id/cancel | Login | | `{status}` |
 | POST /api/block | Login | `{user_id}` | `{ok}` |
@@ -290,7 +291,7 @@ JSON over HTTPS. Errors: `{"error": "<code>", "message": "<sentence>"}` with a 4
 | DEBOUNCE_S | 5 | Time a new state must hold |
 | OFFLINE_S | 30 | No readings before offline |
 | HUMAN_FRESH_S | 10 | A person counts as present if seen this recently (FR-22, FR-24) |
-| REQUEST_TIMEOUT_S | 120 | Host response window |
+| REQUEST_TIMEOUT_S | 300 | Host response window (D42) |
 | MAX_HOSTS_PER_SEARCH | 5 | Request cascade limit |
 | HOST_END_S | 600 | No person before host session ends |
 | HOST_LEAVE_CANCEL_S | 120 | No person before match cancels |
@@ -335,7 +336,7 @@ JSON over HTTPS. Errors: `{"error": "<code>", "message": "<sentence>"}` with a 4
 | icebreaker | Both topics, shared course | One sentence, max 140 characters | Template: "You're both studying {label}. Start by comparing where you're stuck." |
 
 - Model provider: Meta Muse Spark. Any provider must be swappable behind the adapter.
-- Prompts request JSON only and contain no personal data beyond topic and about-me text.
+- Prompts request JSON only and contain no personal data beyond topic, about-me text and major. Names never reach the model (D43).
 - normalizeTopic results are cached in `topic_cache`.
 - Card images: a fixed set of pre-generated Muse Image pictures, one per subject plus a generic one, with no people or text. The client overlays names, course and icebreaker as text.
 

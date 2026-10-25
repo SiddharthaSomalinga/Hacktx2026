@@ -524,3 +524,19 @@ is the partner's call). Once it runs on the servers, `main` fast-forwards to it.
   `OperationalError`, so it maps to `Unavailable` and a 503.
 - **Why per round trip and not per checkout.** The outbox drain holds a transaction across
   push HTTP calls; a checkout deadline would roll back sent marks and resend notifications.
+
+**D42 — Requests wait 5 minutes (`REQUEST_TIMEOUT_S` 120 → 300).** The author's call: a host
+studying with headphones on needs more than two minutes to notice and answer. A declined or
+expired request still moves to the next host (FR-32); a seeker now waits at most 5 minutes
+per host, up to `MAX_HOSTS_PER_SEARCH` hosts.
+
+**D43 — First name and major before accept; majors feed Muse.** The author's call; FR-36, 43,
+53 and REQUIREMENTS §6, §7, §9 amended.
+- **Who sees what before accept.** The host's request card shows the seeker as "Priya ·
+  Chemistry"; the seeker's waiting screen shows the asked host as "Asking Alex ·
+  Biochemistry". The request push says the same.
+- **What stays hidden.** Location (building, floor, table, seat) stays hidden until accept
+  (FR-44). Declines stay silent.
+- **Data.** `users.major` is seeded on the demo users; there is no profile editing.
+- **Muse.** Ranking and icebreakers receive each side's major alongside the topic. Names still
+  never reach the model. The fallback ignores majors.
