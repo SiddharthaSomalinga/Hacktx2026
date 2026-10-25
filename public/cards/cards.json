@@ -1,0 +1,51 @@
+{
+  "model": "muse-image-1.0",
+  "style": "Fine-line architectural illustration, top-down drafting style, warm off-white paper background, thin charcoal ink lines with one burnt-orange accent, calm and minimal, lots of empty space. Absolutely no people, no faces, no hands, no text, no letters, no numbers, no logos.",
+  "cards": {
+    "biology": {
+      "prompt": "a leaf, a cell diagram and a microscope on a library study table. Fine-line architectural illustration, top-down drafting style, warm off-white paper background, thin charcoal ink lines with one burnt-orange accent, calm and minimal, lots of empty space. Absolutely no people, no faces, no hands, no text, no letters, no numbers, no logos.",
+      "sha256": "073d0f923ea2470accbd3448df53581c1c38c353c2cb26b02d8c377d888c3f5a",
+      "generated": "2026-10-25T14:55:56+00:00"
+    },
+    "chemistry": {
+      "prompt": "glass flasks, a benzene ring model and a notebook on a library study table. Fine-line architectural illustration, top-down drafting style, warm off-white paper background, thin charcoal ink lines with one burnt-orange accent, calm and minimal, lots of empty space. Absolutely no people, no faces, no hands, no text, no letters, no numbers, no logos.",
+      "sha256": "61ca0fec684603f8dddf3c1bf6da89cc41cb3f04f25efb79cdf4c32061222efd",
+      "generated": "2026-10-25T14:56:12+00:00"
+    },
+    "computer-science": {
+      "prompt": "a laptop, a tree diagram drawn as nodes and a coffee cup on a study table. Fine-line architectural illustration, top-down drafting style, warm off-white paper background, thin charcoal ink lines with one burnt-orange accent, calm and minimal, lots of empty space. Absolutely no people, no faces, no hands, no text, no letters, no numbers, no logos.",
+      "sha256": "371107f16ffcff2155ce69a57567147283d046526028bf459d198c0d66da897b",
+      "generated": "2026-10-25T14:56:30+00:00"
+    },
+    "economics": {
+      "prompt": "supply and demand curves sketched on paper beside a calculator on a study table. Fine-line architectural illustration, top-down drafting style, warm off-white paper background, thin charcoal ink lines with one burnt-orange accent, calm and minimal, lots of empty space. Absolutely no people, no faces, no hands, no text, no letters, no numbers, no logos.",
+      "sha256": "09862c2ad685a2ee13ef87408c3b5feb4ad3b22091869de8d8190ec9a1a07ad2",
+      "generated": "2026-10-25T14:56:48+00:00"
+    },
+    "generic": {
+      "prompt": "a long library study table with open books, pencils and empty chairs. Fine-line architectural illustration, top-down drafting style, warm off-white paper background, thin charcoal ink lines with one burnt-orange accent, calm and minimal, lots of empty space. Absolutely no people, no faces, no hands, no text, no letters, no numbers, no logos.",
+      "sha256": "59f09440394f89347b43cbaa71794b75bb05464a558f1d7e7b47895bae1b4a5f",
+      "generated": "2026-10-25T14:56:59+00:00"
+    },
+    "mathematics": {
+      "prompt": "a compass, a protractor and geometric figures on a library study table. Fine-line architectural illustration, top-down drafting style, warm off-white paper background, thin charcoal ink lines with one burnt-orange accent, calm and minimal, lots of empty space. Absolutely no people, no faces, no hands, no text, no letters, no numbers, no logos.",
+      "sha256": "09eb6012d1bddb745d6db84d690ab6922d70978a878d95538dc041a9acf2670d",
+      "generated": "2026-10-25T14:57:21+00:00"
+    },
+    "physics": {
+      "prompt": "a pendulum, a magnet and wave diagrams on a library study table. Fine-line architectural illustration, top-down drafting style, warm off-white paper background, thin charcoal ink lines with one burnt-orange accent, calm and minimal, lots of empty space. Absolutely no people, no faces, no hands, no text, no letters, no numbers, no logos.",
+      "sha256": "22d6a6c5dd3abd7cd2d11a375e93f8161c5ae43bb13e3c75e8a63f0fd4bc1a02",
+      "generated": "2026-10-25T14:57:40+00:00"
+    },
+    "psychology": {
+      "prompt": "a brain model, sticky notes and an open journal on a library study table. Fine-line architectural illustration, top-down drafting style, warm off-white paper background, thin charcoal ink lines with one burnt-orange accent, calm and minimal, lots of empty space. Absolutely no people, no faces, no hands, no text, no letters, no numbers, no logos.",
+      "sha256": "8e2fcf09b549e47192939969295a9417c4bdb6f35eaba0f86f59c357e0076d90",
+      "generated": "2026-10-25T14:58:00+00:00"
+    },
+    "statistics": {
+      "prompt": "a bell curve, dice and a scatter of points on paper on a study table. Fine-line architectural illustration, top-down drafting style, warm off-white paper background, thin charcoal ink lines with one burnt-orange accent, calm and minimal, lots of empty space. Absolutely no people, no faces, no hands, no text, no letters, no numbers, no logos.",
+      "sha256": "e5ca9c6247458c8026b09c1374c294252222b5ddf1725953c4db53b2b7a68ff1",
+      "generated": "2026-10-25T14:58:29+00:00"
+    }
+  }
+}
