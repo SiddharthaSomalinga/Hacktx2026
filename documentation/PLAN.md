@@ -631,3 +631,7 @@ replaces D45's color mapping. In the app, open is green, occupied blue, likely o
 (dashed, with a bag), offline grey (hatched). The recommended or assigned seat (FR-12) is
 burnt orange, which no state uses. Burnt orange also marks primary actions, section labels,
 active controls and the floor-plan frame. FR-8 building colors and the FR-7 LEDs are unchanged.
+
+**D55 — The app is called Synapse.** The author's call. Every name a user sees in the v2 app
+(wordmark, page title, install name, messages, notifications) says Synapse. The project docs,
+repo, backend and API keep their existing names.
