@@ -5,7 +5,7 @@ from __future__ import annotations
 import hmac
 from typing import Annotated
 
-from fastapi import Depends, Header, Request
+from fastapi import Depends, Header, Path, Request
 
 from app.services.container import Services
 from app.services.errors import unauthorized
@@ -39,3 +39,7 @@ def require_node_key(request: Request, x_node_key: Annotated[str | None, Header(
     expected: str = request.app.state.node_key
     if x_node_key is None or not hmac.compare_digest(x_node_key.encode(), expected.encode()):
         raise unauthorized("invalid_node_key", "Missing or wrong X-Node-Key header")
+
+
+# Ids in URL paths are bounded like every other input (security floor §2).
+PathId = Annotated[str, Path(min_length=1, max_length=64)]

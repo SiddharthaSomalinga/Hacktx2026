@@ -7,7 +7,7 @@ from typing import Annotated
 from fastapi import APIRouter, Query, Request, Response
 
 from app.interface import schemas
-from app.interface.deps import ServicesDep
+from app.interface.deps import PathId, ServicesDep
 from app.services.views import BuildingFullView, Cached
 
 router = APIRouter(prefix="/api", tags=["public"])
@@ -31,7 +31,7 @@ def buildings(request: Request, services: ServicesDep) -> Response:
 
 
 @router.get("/buildings/{building_id}", response_model=schemas.BuildingDetail)
-def building(building_id: str, request: Request, services: ServicesDep) -> Response:
+def building(building_id: PathId, request: Request, services: ServicesDep) -> Response:
     return _cached(request, services.map.building(building_id))
 
 
@@ -49,7 +49,7 @@ def recommend(
 
 
 @router.get("/buildings/{building_id}/history", response_model=list[schemas.HistoryPoint])
-def history(building_id: str, services: ServicesDep) -> list[schemas.HistoryPoint]:
+def history(building_id: PathId, services: ServicesDep) -> list[schemas.HistoryPoint]:
     return [
         schemas.HistoryPoint(hour=hour, open_avg=avg)
         for hour, avg in services.history.history(building_id)
