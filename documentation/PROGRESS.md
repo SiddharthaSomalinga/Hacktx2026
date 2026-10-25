@@ -5,10 +5,10 @@ Session log. Concrete changes, commands and observed results only.
 ## Current status
 
 - **Milestone:** backend B0–B5 built and verified locally on Postgres 16 + TimescaleDB 2.31.
-  Remaining backend steps wait on other roles or unknowns (PLAN: H0 hand-off, U3 deploy,
+  Remaining backend steps wait on other roles or unknowns (PLAN: H0 hand-off, the D36 deploy,
   U1 Muse, IC1–IC3).
 - **Tests:** 177 pass with Postgres (`make test-db`); 150 pass and 27 skip without it.
-- **Open questions:** Q2, U1, U2 (Tiger Data connection limit), U3 (PLAN).
+- **Open questions:** Q2, U1, U2 (Tiger Data connection limit) (PLAN). U3 resolved: D36, D37.
 
 ---
 
@@ -191,6 +191,6 @@ Caught before committing:
 1. **Frontend integration (IC1).** The partner merges `origin/v1backend` into their branch and
    points the Vite proxy at `make dev`.
 2. **H0:** the hardware pair's node and seat ids replace the placeholders in `sql/seed.sql`.
-3. **U3:** choose a host. Set `DB_POOL_SIZE` against the database limit, `COOKIE_SECURE=true`,
+3. **Deploy (D36, D37):** Vultr instances and load balancer, `.tech` DNS on Vultr. Set `DB_POOL_SIZE` against the database limit, `COOKIE_SECURE=true`,
    `FRONTEND_DIST`. Run `make policies` on Tiger Data, then `make qr ORIGIN=…`.
 4. **U1:** add the `MuseAI` adapter behind `TopicAI` once access exists.

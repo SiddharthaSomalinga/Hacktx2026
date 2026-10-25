@@ -328,7 +328,7 @@ class TopicAI(Protocol):                     # services/ports.py
 - **N instances** are safe because no state of record lives in memory (NFR-8). The scheduler uses `SKIP LOCKED` (§14), and caches are derived (§5).
 - **Connection budget (D34).** Every process opens a primary pool of `DB_POOL_SIZE` (default 5), plus a replica pool when `DATABASE_READ_URL` is set. Processes × instances × pools × `DB_POOL_SIZE` must stay below the database's `max_connections`. The local Timescale image allows 25, and 4 workers × 5 peaked at exactly 20 under load.
 - **Outages (D35).** Connection failures become `Unavailable` in the repository and a 503 `database_unavailable` with `Retry-After: 5` at the API, after at most the 5 s pool wait. `/api/health` reports `db: false`.
-- **Host choice is U3.** Criteria: always-on, HTTPS, environment variables, at least two instances. Fallback: a laptop behind a `cloudflared` tunnel.
+- **Host (D36, D37).** Two Vultr Cloud Compute instances in New Jersey behind a Vultr Load Balancer (Auto SSL, health check `GET /api/health`), on a `.tech` domain whose DNS is on Vultr. Deploys roll one instance at a time. Fallback: a laptop behind a `cloudflared` tunnel.
 - **Network.** The Pi and the phones use the public URL. A phone hotspot is the backup network.
 
 ## 12. Frontend integration map (frontend role)

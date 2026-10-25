@@ -43,11 +43,11 @@ touches, then recorded here as a decision.
 | Sun 2:00–5:00 PM | Live judging in WEL |
 | Sun 5:30 PM | Pitch, GDC 2.216 |
 
-Tracks: Best Hardware · Meta (Bringing People Closer Together with AI) · MLH Best Use of Tiger Data.
+Tracks: Best Hardware · Meta (Bringing People Closer Together with AI) · MLH Best Use of Tiger Data · .TECH domain (D37).
 
 ## Current milestone
 
-Backend B0–B5 built and verified locally on Postgres + TimescaleDB (PROGRESS, Session 3). Open backend steps wait on other roles or unknowns: hardware handoff (H0), deploy (U3), Muse (U1), and the integration checkpoints IC1–IC3 with the frontend.
+Backend B0–B5 built and verified locally on Postgres + TimescaleDB (PROGRESS, Session 3). Open backend steps wait on other roles or unknowns: hardware handoff (H0), deploy (D36: Vultr setup and the Tiger Data service), Muse (U1), and the integration checkpoints IC1–IC3 with the frontend.
 
 ## Backend checklist — Manideep (`v1backend`)
 
@@ -83,7 +83,7 @@ commit when green.
    - `state_agg` path, continuous aggregate, compression and retention policies.
    - `scripts/seed_history.py`; `GET /api/buildings/:id/history`.
    - Test: a hand-built change log → exact `open_avg` per hour.
-4. ⬜ *(Blocked on U3.)* Deploy (U3): one origin serving `frontend/dist`, two instances, and the Pi pointed at it.
+4. ⬜ Deploy (D36, D37): one origin serving `frontend/dist`, two instances, and the Pi pointed at it.
 5. ✅ `scripts/seat_qr.py`: a printable sheet of `<origin>/seat/<seat_id>` QR codes for the hardware pair.
 
 ### B3 — Accounts, topics, host, search (Meta track)
@@ -125,7 +125,7 @@ commit when green.
 2. ✅ Boundary logging without secrets (ARCH §7).
 3. ✅ Read/write split via `DATABASE_READ_URL`. Test: locked and write paths never use the read pool.
 4. ✅ `scripts/load_check.py`: 500 polling clients plus 50 fake nodes; p50/p95 latency and DB load recorded in PROGRESS with the machine named.
-5. 🚧 Security pass and pre-commit checklist ✅; two instances verified locally (4 workers) ✅; merge into `v1` and deploy ⬜ (U3, IC1).
+5. 🚧 Security pass and pre-commit checklist ✅; two instances verified locally (4 workers) ✅; merge into `v1` and deploy ⬜ (D36, IC1).
 
 ### B6 — Ship
 1. ⬜ Demo environment: `GHOST_S=15`.
@@ -266,7 +266,7 @@ REQUIREMENTS §11, plus WebSockets (FR-10 specifies polling).
 | Q13 | On accept, the host's table has no open seat at that instant | Team | B4.1 | Resolved: nearest open seat on the floor; none → no assigned seat |
 | U1 | Muse Spark and Muse Image access (key, endpoint, auth, JSON mode) | Backend, from Meta sponsors | B4.7, F4.3 | **Open** |
 | U2 | Tiger Data: connection limit (sets `DB_POOL_SIZE`) | Backend | Deploy | **Open** — locally TimescaleDB 2.31 works; Toolkit no longer needed (D33) |
-| U3 | Deploy host (always-on, HTTPS, env vars, ≥ 2 instances) | Backend | B2.4 | **Open** |
+| U3 | Deploy host (always-on, HTTPS, env vars, ≥ 2 instances) | Backend | B2.4 | Resolved: D36, D37 |
 
 ## Risks
 
@@ -458,3 +458,20 @@ the real limit before deploying (U2).
 port's `Unavailable`. The API answers 503 `database_unavailable` with `Retry-After: 5`, after at
 most a 5 s pool wait, instead of a 500 after 10 s. The frontend shows an offline state and keeps
 polling.
+
+**D36 — Deploy on Vultr: two instances behind a Vultr Load Balancer (resolves U3).** Options:
+Fly.io, AWS (App Runner, ECS Fargate, EC2), Vultr; the team chose Vultr.
+- **Two Cloud Compute instances in New Jersey.** It is the Vultr region closest to Tiger Data's
+  `us-east-1`, and every request makes several database round trips, so database latency
+  matters more than distance to Austin.
+- **Each instance** runs the same Docker image (API, `frontend/dist`, worker thread) with
+  `restart: unless-stopped`. Nothing of record is local (NFR-8), so either instance can die.
+- **The load balancer** terminates HTTPS with Auto SSL and health-checks `GET /api/health`. That
+  endpoint answers 200 even when the database is down (D35), so a database outage does not
+  empty the pool; each instance still answers 503 on its own.
+- **Deploys roll one instance at a time** from a pinned commit of `v1`, waiting for the health
+  check before the next, so the URL never goes down.
+
+**D37 — Public URL on a `.tech` domain, DNS on Vultr.** Vultr's Auto SSL only works for domains
+whose DNS Vultr hosts, so the domain's nameservers point at Vultr. The printed QR codes and the
+Pi bridge use this URL, so it is fixed before `make qr` runs.
