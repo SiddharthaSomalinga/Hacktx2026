@@ -56,9 +56,9 @@ is the node's local fallback (HW-5).
 │   ├── deploy/                # compose.yaml, provision.sh, deploy.sh (rolling, D36)
 │   ├── Dockerfile             # API + worker + frontend/dist; built from the repo root
 │   └── pyproject.toml · uv.lock · Makefile · .env.example · .gitignore
-├── bridge/                    # Pi serial ⇄ HTTPS (hardware role)
-├── firmware/                  # Arduino sketch (hardware role)
-└── frontend/                  # Vite + React + PWA (frontend role; moved from the repo root, D6)
+├── bridge/                    # arduino_bridge.py: serial ⇄ POST /api/readings, env config (D39)
+├── firmware/                  # HACKATHON/HACKATHON.ino: one IR sensor (Q14) (D39)
+└── frontend/                  # Vite + React + PWA; still at the repo root on v1final (D6, D40)
 ```
 
 ## 3. Backend layers
