@@ -171,23 +171,25 @@ export function CampusMap({ buildings, badges, animate, onBuilding }: Props) {
             const lift = lifts.get(f.id) ?? 0
             const share = b ? shareOf(b) : 'none'
             const badge = badges?.[f.id]
-            const label = b
-              ? `${b.name}${b.is_simulated ? ', simulated' : ''}: ${b.open} open, ${SHARE_WORDS[share]}${badge ? `, ${badge}` : ''}`
-              : shortName(f.id)
             return (
               <button
                 key={f.id}
                 type="button"
                 className={styles.marker}
                 style={{ left: x, top: y, ['--share' as string]: SHARE_VAR[share], ['--lift' as string]: `${lift}px` }}
-                aria-label={label}
                 onClick={() => onBuilding(f.id)}
               >
                 <span className={styles.swatch} aria-hidden />
-                <span className={styles.code}>{shortName(f.id)}</span>
-                {b && <span className={styles.count}>{b.open}</span>}
-                {b?.is_simulated && <span className={styles.sim}>SIM</span>}
+                <span className={styles.code}>{shortName(f.id)}</span>{' '}
+                {b && <span className={styles.count}>{b.open}</span>}{' '}
+                {b?.is_simulated && <span className={styles.sim}>SIM</span>}{' '}
                 {badge && <span className={styles.badge}>{badge}</span>}
+                {b && (
+                  <span className="visually-hidden">
+                    : {b.name}, {b.open} open seats, {SHARE_WORDS[share]}
+                    {b.is_simulated ? ', simulated' : ''}
+                  </span>
+                )}
               </button>
             )
           })}
