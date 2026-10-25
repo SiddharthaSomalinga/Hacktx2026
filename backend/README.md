@@ -173,7 +173,7 @@ bash provision.sh https://github.com/SiddharthaSomalinga/Hacktx2026.git
 # then fill /etc/ghostseats.env (mode 600) from .env.example, with COOKIE_SECURE=true
 
 # from backend/ on your laptop, for any commit already pushed
-make deploy HOSTS="root@<ip-1> root@<ip-2>" REF=origin/v1
+make deploy HOSTS="root@<ip-1> root@<ip-2>" REF=origin/v1final FRONTEND_DIR=.
 ```
 
 - **Rolling.** `deploy.sh` updates one host at a time and waits for its container health check

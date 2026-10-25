@@ -266,7 +266,7 @@ REQUIREMENTS §11, plus WebSockets (FR-10 specifies polling).
 | Q11 | FR-27 confirmation endpoint and grace | Team | B3.3 | Resolved: D24 |
 | Q12 | History chart window and raw retention | Team | B2.3 | Resolved: 24 h, 30 days (hourly rollup kept) |
 | Q13 | On accept, the host's table has no open seat at that instant | Team | B4.1 | Resolved: nearest open seat on the floor; none → no assigned seat |
-| Q14 | The demo seat has one IR proximity sensor, so the bridge sends `human_present = object_present`. A bag reads as a person and the seat never turns `likely_opening` (D18, HW-1..6). Add a presence sensor, or change the demo? | Team, hardware pair | IC1, B6 | **Open** |
+| Q14 | The demo table has one IR proximity sensor (seat `t1-s1`). (a) The bridge sends `human_present = object_present`, so a bag reads as a person and the seat never turns `likely_opening` (D18, HW-1..6). (b) `t1-s2` never reports, so the table has no open seat and the host is hidden as `table_full` (FR-24): no seeker can join the real table. Second sensor, presence sensor, or a changed demo? | Team, hardware pair | IC1, IC2, B6 | **Open** |
 | U1 | Muse Spark and Muse Image access (key, endpoint, auth, JSON mode) | Backend, from Meta sponsors | B4.7, F4.3 | Resolved: key obtained; API per D38. `muse-image-1.0` is on the same API (F4.3) |
 | U2 | Tiger Data: connection limit (sets `DB_POOL_SIZE`) | Backend | Deploy | Resolved: `max_connections` 105 (12 reserved); 2 hosts × 2 workers × 5 = 20, so `DB_POOL_SIZE` stays 5 |
 | U3 | Deploy host (always-on, HTTPS, env vars, ≥ 2 instances) | Backend | B2.4 | Resolved: D36, D37 |

@@ -76,5 +76,5 @@ muse-check: ## One live call per AI function with the MUSE_API_KEY in .env, with
 image: ## Build the deploy image locally (FRONTEND_DIR relative to the repo root, default frontend)
 	cd .. && DOCKER_BUILDKIT=1 docker build -f backend/Dockerfile --build-arg FRONTEND_DIR=$${FRONTEND_DIR:-frontend} -t ghostseats-api:local .
 
-deploy: ## Rolling deploy of REF (default origin/v1) to HOSTS="root@ip1 root@ip2" (D36)
+deploy: ## Rolling deploy of REF (default origin/v1final, D40) to HOSTS="root@ip1 root@ip2" (D36)
 	./deploy/deploy.sh $(REF)
