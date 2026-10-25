@@ -1,0 +1,26 @@
+.toast {
+  position: fixed;
+  top: calc(64px + env(safe-area-inset-top));
+  left: 50%;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  max-width: calc(100vw - 2 * var(--s-4));
+  padding: var(--s-2) var(--s-2) var(--s-2) var(--s-4);
+  min-height: var(--hit);
+  transform: translateX(-50%);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-full);
+  background: var(--surface);
+  box-shadow: var(--shadow-2);
+  font-size: var(--t-xs);
+  animation: drop var(--d-slow) var(--ease-out) both;
+}
+
+@keyframes drop {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -8px);
+  }
+}

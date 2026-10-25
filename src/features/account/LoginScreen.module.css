@@ -1,0 +1,42 @@
+.user {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  width: 100%;
+  min-height: 60px;
+  padding: var(--s-2) 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+}
+
+.user:hover .name {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.avatar {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-full);
+  background: var(--surface-2);
+  font-family: var(--font-mono);
+  font-weight: var(--w-medium);
+}
+
+.who {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.name {
+  font-weight: var(--w-medium);
+}
+
+.chevron {
+  color: var(--ink-3);
+}

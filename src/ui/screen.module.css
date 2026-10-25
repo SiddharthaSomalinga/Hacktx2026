@@ -1,0 +1,151 @@
+/* Shared panel typography and rhythm: one source, so every screen spaces and sizes alike. */
+.screen {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-5);
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+
+.eyebrow {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  color: var(--ink-2);
+  font-family: var(--font-mono);
+  font-size: var(--t-xs);
+  letter-spacing: 0.02em;
+}
+
+.title {
+  font-size: var(--t-lg);
+}
+
+.subtitle {
+  font-size: var(--t-md);
+}
+
+.big {
+  font-family: var(--font-mono);
+  font-size: var(--t-xl);
+  font-weight: var(--w-medium);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+
+.muted {
+  color: var(--ink-2);
+}
+
+.small {
+  font-size: var(--t-xs);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  flex-wrap: wrap;
+}
+
+.actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 var(--s-2);
+  min-height: 22px;
+  border: 1px solid var(--line-2);
+  border-radius: 4px;
+  color: var(--ink-2);
+  font-family: var(--font-mono);
+  font-size: var(--t-xs);
+  letter-spacing: 0.04em;
+}
+
+.note {
+  display: flex;
+  gap: var(--s-3);
+  align-items: flex-start;
+  padding: var(--s-3);
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+  color: var(--ink);
+  font-size: var(--t-xs);
+}
+
+.error {
+  composes: note;
+  background: color-mix(in srgb, var(--danger) 9%, var(--surface));
+  color: var(--ink);
+  border: 1px solid color-mix(in srgb, var(--danger) 35%, transparent);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--line);
+}
+
+.list > li {
+  border-bottom: 1px solid var(--line);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+
+.label {
+  font-size: var(--t-xs);
+  font-weight: var(--w-medium);
+  color: var(--ink-2);
+}
+
+.input {
+  min-height: 48px;
+  padding: 0 var(--s-3);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-sm);
+  background: var(--paper);
+  color: var(--ink);
+  font-size: var(--t-md);
+}
+
+.input::placeholder {
+  color: var(--ink-3);
+}
+
+.input:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 0;
+  border-color: transparent;
+}
+
+.textarea {
+  composes: input;
+  min-height: 88px;
+  padding: var(--s-3);
+  font-size: var(--t-sm);
+  resize: vertical;
+}
+
+.count {
+  align-self: flex-end;
+  color: var(--ink-2);
+  font-size: var(--t-xs);
+  font-variant-numeric: tabular-nums;
+}

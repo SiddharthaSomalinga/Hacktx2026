@@ -1,0 +1,51 @@
+.bar {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  width: 100%;
+  min-height: var(--hit);
+  margin-bottom: var(--s-4);
+  padding: 0 var(--s-3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+  color: var(--ink);
+  font-size: var(--t-sm);
+  font-weight: var(--w-medium);
+  text-align: left;
+}
+
+.bar:hover {
+  border-color: var(--line-2);
+}
+
+.text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.dot {
+  width: 10px;
+  height: 10px;
+  border-radius: var(--r-full);
+  background: var(--ink-3);
+}
+
+.foryou .dot {
+  background: var(--foryou);
+}
+
+.open .dot {
+  background: var(--open);
+  animation: breathe 2s ease-in-out infinite;
+}
+
+@keyframes breathe {
+  50% {
+    opacity: 0.4;
+  }
+}

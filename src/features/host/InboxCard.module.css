@@ -1,0 +1,40 @@
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  padding: var(--s-4);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-2);
+  animation: arrive var(--d-slow) var(--ease-out) both;
+}
+
+.top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s-3);
+}
+
+.who {
+  font-size: var(--t-md);
+  font-weight: var(--w-bold);
+}
+
+.left {
+  color: var(--ink-2);
+}
+
+.buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: var(--s-2);
+}
+
+@keyframes arrive {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
