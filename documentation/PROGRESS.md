@@ -384,6 +384,31 @@ Caught before committing:
   - Seat tiles show raw ids.
   - "1 floors"; PCL has 2.
 
+### Frontend fixes on `v1final` (at the author's request)
+- **`e502f45`:** the ☰ button opens a menu panel (pages, log in or out); the profile chip opens
+  it on desktop.
+- **`32fd470`:** the login picker lists `/api/demo-users` and logs in by id. Before, Priya
+  logged in as Alex.
+- **`3059411`:** the core loop is wired to the API.
+  - Seeker: search → join → poll → match (a cancel is offered while searching).
+  - Host setup per D17: toggle, then link, then topic. The status and hidden reason come from
+    `/me`; mute and confirm work.
+  - Real inbox (Accept / Not now / Mute), replacing the mock "Maya".
+  - Real match view on both sides, with the alt seat, "I'm here" and cancel.
+  - Removed: "Block or report". The match response has no user id to block (FR-45 gap in
+    the UI only).
+- **`c77eead`:** `likely_opening` gets its style; offline seats are grey "No signal" with a
+  count; labels read "T01·2"; building rows show the seat count; the hero space; the header
+  fits at 375 px.
+- **Verified in headless Chromium, two phones at 375 px:**
+  - Alex links `t1-s1` → FINDABLE.
+  - Priya searches → "Asking someone studying CH 320M · 115s left".
+  - Alex's inbox card shows no name → Accept → Alex sees Priya, Priya's phone opens the match
+    with Alex, `t1-s2` and the live icebreaker → "I'm here" → completed.
+  - All 200, no page errors; passed again after the last commit.
+- **Still open:** seat colors (green = occupied in the UI, green = open for LEDs and FR-8) are
+  a team decision. The history chart's orange curve is decorative.
+
 ## Next steps
 1. **Q14 (team):** a second sensed seat at the demo table, and a person sensor or a changed
    demo. Without them the real table cannot host a match or show a ghost seat.
