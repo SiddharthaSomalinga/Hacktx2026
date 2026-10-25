@@ -65,3 +65,7 @@ kbd { padding: 3px 5px; color: #7b8580; border: 1px solid var(--line); font: 10p
 .host-step.complete > span { background: var(--green); }
 .host-step > span { background: #eee3d9; }
 .count-badge { background: var(--mint); }
+.menu-panel { position: sticky; top: 0; z-index: 40; display: grid; margin-left: auto; width: min(100%, 280px); padding: 8px; background: var(--paper); border: 1px solid var(--line); box-shadow: 0 12px 30px rgba(51,63,72,.12); }
+.menu-panel button { padding: 14px 16px; text-align: left; background: none; color: var(--ink); font-size: 15px; border-left: 3px solid transparent; }
+.menu-panel button.active { border-left-color: var(--green); font-weight: 700; }
+@media (max-width: 800px) { .menu-panel { width: 100%; } }
