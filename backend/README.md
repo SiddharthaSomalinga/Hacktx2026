@@ -161,6 +161,33 @@ every 2 s, and then removes the load-test data.
 - **Building list rarely 304s.** Its counts change every second under random node traffic, so
   its ETag rarely repeats. The building detail is mostly 304.
 
+## Deploy
+
+Two Vultr instances in New Jersey behind a Vultr Load Balancer, which terminates HTTPS (Auto SSL)
+and health-checks `/api/health` (D36). Each instance builds and runs one image: the API, its
+worker thread and the built frontend.
+
+```bash
+# once per server, as root on a fresh Ubuntu 24.04 instance
+bash provision.sh https://github.com/SiddharthaSomalinga/Hacktx2026.git
+# then fill /etc/ghostseats.env (mode 600) from .env.example, with COOKIE_SECURE=true
+
+# from backend/ on your laptop, for any commit already pushed
+make deploy HOSTS="root@<ip-1> root@<ip-2>" REF=origin/v1
+```
+
+- **Rolling.** `deploy.sh` updates one host at a time and waits for its container health check
+  before the next. A commit that is not on GitHub is refused before any host is touched.
+- **A failed host stops the rollout.** I tested it with an empty `SECRET_KEY`. The config check
+  kills uvicorn's workers, the container never turns healthy, and the script prints the last
+  50 log lines and exits. The other host keeps serving the old commit. The broken host stays
+  broken until the next deploy; the load balancer takes it out of rotation.
+- **A short gap per host.** While a container restarts, the load balancer can still send it
+  traffic until its own health check notices (up to interval × threshold). Expect a few failed
+  requests per deploy.
+- **`make image`** builds the same image locally. The frontend sits at the repo root on
+  `v1frontend` until F0 moves it, so pass `FRONTEND_DIR=.` until then.
+
 ## Security
 
 - **Validation.** Every input is bounded by a Pydantic model or path parameter, including ids
@@ -194,4 +221,5 @@ every 2 s, and then removes the load-test data.
   yet.
 - **Placeholder seat ids.** The demo table uses node `table-1` and seats `t1-s1`, `t1-s2` until
   the hardware ids replace them in `sql/seed.sql`.
-- **Not deployed yet**, so web push has only been exercised against a test double.
+- **Not deployed yet**, so web push has only been exercised against a test double, and the
+  rollout was tested on this laptop with a stand-in for `ssh`, not on Vultr.

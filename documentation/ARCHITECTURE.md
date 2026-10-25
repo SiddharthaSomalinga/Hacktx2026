@@ -53,6 +53,8 @@ is the node's local fallback (HW-5).
 │   ├── sql/                   # schema.sql, seed.sql
 │   ├── scripts/               # db, fake_node, seed_history, seat_qr, vapid_keys, load_check
 │   ├── tests/                 # domain/, api/, repo_contract/, fakes.py (in-memory repository)
+│   ├── deploy/                # compose.yaml, provision.sh, deploy.sh (rolling, D36)
+│   ├── Dockerfile             # API + worker + frontend/dist; built from the repo root
 │   └── pyproject.toml · uv.lock · Makefile · .env.example · .gitignore
 ├── bridge/                    # Pi serial ⇄ HTTPS (hardware role)
 ├── firmware/                  # Arduino sketch (hardware role)

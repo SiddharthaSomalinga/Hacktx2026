@@ -1,0 +1,19 @@
+# One API container per Vultr instance (D36). Secrets come from ENV_FILE on the server, never
+# from the repository. deploy.sh sets COMPOSE_PROJECT_NAME, GIT_SHA and FRONTEND_DIR.
+services:
+  api:
+    build:
+      context: ../..
+      dockerfile: backend/Dockerfile
+      args:
+        FRONTEND_DIR: ${FRONTEND_DIR:-frontend}
+    image: ghostseats-api:${GIT_SHA:-local}
+    env_file: ${ENV_FILE:-/etc/ghostseats.env}
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "5"

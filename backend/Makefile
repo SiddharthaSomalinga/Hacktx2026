@@ -3,7 +3,7 @@ RUN := uv run --frozen
 DB_CONTAINER := ghostseats-db
 LOCAL_TEST_DB := postgresql://postgres:ghostseats@localhost:5433/ghostseats_test
 
-.PHONY: help sync dev test test-db lint fmt typecheck check db-up db-create db-down db-init seed seed-history policies fake-node qr vapid-keys load-check
+.PHONY: help sync dev test test-db lint fmt typecheck check db-up db-create db-down db-init seed seed-history policies fake-node qr vapid-keys load-check image deploy
 
 help: ## List targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-14s %s\n", $$1, $$2}'
@@ -69,3 +69,9 @@ vapid-keys: ## Generate a VAPID key pair for .env
 
 load-check: ## 500 polling clients + 50 fake nodes against BASE_URL (creates load-test seats)
 	$(RUN) python -m scripts.load_check --setup --base-url "$${BASE_URL:-http://localhost:8000}" $(ARGS)
+
+image: ## Build the deploy image locally (FRONTEND_DIR relative to the repo root, default frontend)
+	cd .. && DOCKER_BUILDKIT=1 docker build -f backend/Dockerfile --build-arg FRONTEND_DIR=$${FRONTEND_DIR:-frontend} -t ghostseats-api:local .
+
+deploy: ## Rolling deploy of REF (default origin/v1) to HOSTS="root@ip1 root@ip2" (D36)
+	./deploy/deploy.sh $(REF)

@@ -1,0 +1,17 @@
+# Context is the repository root. Secrets and local state never enter the image.
+.git
+**/.env
+**/.env.*
+!**/.env.example
+**/node_modules
+**/dist
+**/.venv
+**/__pycache__
+**/*.pyc
+**/.pytest_cache
+**/.ruff_cache
+**/.mypy_cache
+**/.DS_Store
+documentation
+backend/tests
+backend/out
