@@ -56,6 +56,10 @@ class Settings(BaseSettings):
     history_window_h: int = Field(24, gt=0)
     readings_retention_days: int = Field(30, gt=0)
     push_max_attempts: int = Field(5, gt=0)
+    # Demo hosts (D56): simulated hosts take requests and accept them after DEMO_ACCEPT_S, so
+    # the seeker flow can be tried alone. Off by default: FR-31 holds unless this is set.
+    demo_hosts: bool = False
+    demo_accept_s: int = Field(5, gt=0)
 
     def timers(self) -> Timers:
         return Timers(

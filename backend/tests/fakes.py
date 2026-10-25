@@ -357,6 +357,16 @@ class InMemoryTx:
                 out.append(s.id)
         return sorted(out)
 
+    def demo_request_ids(self, created_before: datetime) -> list[str]:
+        pending = [
+            r
+            for r in self.d.requests.values()
+            if r.status is RequestStatus.PENDING
+            and r.created_at <= created_before
+            and self.d.seats[self.d.sessions[r.host_session_id].seat_id].is_simulated
+        ]
+        return [r.id for r in sorted(pending, key=lambda r: (r.created_at, r.id))]
+
 
 class InMemoryRepository:
     def __init__(self) -> None:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import timedelta
 
 from app.adapters.ai_fallback import FallbackAI
 from app.adapters.ai_muse import MuseAI
@@ -50,5 +51,7 @@ def build_services(settings: Settings) -> Services:
         history_window_h=settings.history_window_h,
         push_max_attempts=settings.push_max_attempts,
         vapid_public_key=settings.vapid_public_key,
+        demo_hosts=settings.demo_hosts,
+        demo_accept=timedelta(seconds=settings.demo_accept_s),
     )
     return Services.build(ctx)
