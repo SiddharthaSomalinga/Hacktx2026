@@ -60,6 +60,7 @@ class MatchService:
                 status=match.status,
                 role="seeker" if is_seeker else "host",
                 other_first_name=other.first_name,
+                other_major=other.major,
                 building=building.name,
                 floor=host_seat.floor,
                 table_label=facts.table_of(host_seat).label,

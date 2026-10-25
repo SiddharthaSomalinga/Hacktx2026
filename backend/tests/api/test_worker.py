@@ -5,6 +5,7 @@ from __future__ import annotations
 from app.worker import Worker
 from tests.api.conftest import World
 from tests.api.harness import PERSON
+from tests.conftest import make_settings
 
 
 def test_worker_moves_an_expired_request_and_pushes_it(world: World) -> None:
@@ -27,7 +28,7 @@ def test_worker_moves_an_expired_request_and_pushes_it(world: World) -> None:
     worker = Worker(world.services, tick_s=0.01)
     worker.run_once()
     assert len(world.notifier.sent) == 1  # the first host's request was pushed
-    world.node.run(120)  # the first request times out; nobody opens the app
+    world.node.run(make_settings().request_timeout_s)  # times out; nobody opens the app
     worker.run_once()
     assert len(world.notifier.sent) == 2
     first, second = (endpoint for endpoint, _ in world.notifier.sent)

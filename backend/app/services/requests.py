@@ -20,7 +20,7 @@ from app.domain.types import (
 from app.services.context import Context
 from app.services.errors import conflict, forbidden, not_found
 from app.services.facts import Facts
-from app.services.lifecycle import Candidate, LifecycleService, topic_of
+from app.services.lifecycle import Candidate, LifecycleService, major_of, topic_of
 from app.services.ports import Lock, Tx
 
 
@@ -61,9 +61,13 @@ class RequestService:
             assert search is not None
             host_seat = tx.seat(session.seat_id)
             assert host_seat is not None
-        # The icebreaker is generated before any lock is taken (≤ AI_TIMEOUT_S).
+            seeker_major = major_of(tx, search.seeker_id)
+            host_major = major_of(tx, session.user_id)
+        # The icebreaker is generated before any lock is taken (≤ AI_TIMEOUT_S). D43: Muse
+        # sees both majors, never names.
         icebreaker = self._ctx.ai.icebreaker(
-            topic_of(search), Candidate(session, host_seat, search.offered_group).topic
+            topic_of(search, seeker_major),
+            Candidate(session, host_seat, search.offered_group, host_major).topic,
         )
 
         now = self._ctx.clock.now()
