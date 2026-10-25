@@ -187,6 +187,50 @@ Caught before committing:
 - **Muse Spark (U1):** not built; every AI call uses the fallback.
 - **Real hardware and the real seat ids (Q2/H0); frontend integration (IC1–IC3).**
 
+## 2026-10-24 — Session 4: deploy decisions and deploy kit
+
+### Decisions
+- **D36:** Vultr, two instances in New Jersey behind a Vultr Load Balancer (resolves U3).
+- **D37:** a `.tech` domain, with its DNS on Vultr (required for Auto SSL).
+- Fly.io was the first recommendation. New Fly accounts no longer get a free allowance (they
+  get a short trial, then about $2/month per small machine). App Runner was ruled out: it
+  throttles CPU between requests, which would stall the worker thread.
+
+### Changes
+- `backend/Dockerfile`: a Node 22 stage builds the frontend; a Python 3.12 slim stage installs
+  from `uv.lock` without dev dependencies. The image runs as a non-root user, has a health
+  check and runs `uvicorn --workers $WEB_CONCURRENCY` (2) with proxy headers.
+- `backend/Dockerfile.dockerignore`: the build context is the repo root, so the frontend can
+  be included; this file keeps `.env*`, `.git`, tests and caches out.
+- `backend/deploy/`:
+  - `compose.yaml`: one API container per host, secrets from `/etc/ghostseats.env`.
+  - `provision.sh`: one-time server setup.
+  - `deploy.sh`: rolling deploy of one pushed commit.
+- `make image`, `make deploy`. README deploy section; ARCH §2 and §11.
+
+### Verification
+- **Image:** built from a scratch context holding `origin/v1frontend` as `frontend/`; 395 MB.
+  - Inside it: no `.env` anywhere, no `node_modules`, uid 999, Python 3.12.15.
+  - Run against the local database: healthy with 2 worker processes. `/api/health` →
+    `{"ok":true,"db":true}`, map 200, `/api/nope` → JSON 404, `/seat/t1-s1` → the app's
+    `index.html`, `/sw.js` → 200 `text/javascript`.
+- **`deploy.sh`,** run against a bare-repo "origin" and a server clone, with a stand-in `ssh`
+  that executes locally:
+  - Two hosts updated in turn, each healthy at the pinned commit.
+  - An unpushed commit was refused before any host was touched.
+  - An empty `SECRET_KEY` meant the container never turned healthy. The script printed the
+    logs and stopped before the second host.
+- **Found on the way:** the laptop's Compose 2.1.1 rejects a top-level `name:` ("Additional
+  property name is not allowed"; it needs Compose 2.3+). The project name now comes from
+  `COMPOSE_PROJECT_NAME`.
+- Ubuntu 24.04 has `docker.io` 29.1, `docker-compose-v2` 2.40 and `docker-buildx` 0.30
+  (`apt-get --dry-run` in `ubuntu:24.04`).
+- `shellcheck` 0.10 clean on both scripts. `make check`: 150 passed, 27 skipped.
+
+### Not verified
+- `provision.sh` on a real Vultr instance (no systemd in the test container); the load
+  balancer, Auto SSL and the `.tech` DNS; Tiger Data (U2).
+
 ## Next steps
 1. **Frontend integration (IC1).** The partner merges `origin/v1backend` into their branch and
    points the Vite proxy at `make dev`.

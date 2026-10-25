@@ -83,7 +83,9 @@ commit when green.
    - `state_agg` path, continuous aggregate, compression and retention policies.
    - `scripts/seed_history.py`; `GET /api/buildings/:id/history`.
    - Test: a hand-built change log → exact `open_avg` per hour.
-4. ⬜ Deploy (D36, D37): one origin serving `frontend/dist`, two instances, and the Pi pointed at it.
+4. 🚧 Deploy (D36, D37): one origin serving `frontend/dist`, two instances, and the Pi pointed at it.
+   - ✅ `backend/Dockerfile`, `deploy/` (compose, provision, rolling deploy), tested locally.
+   - ⬜ Tiger Data service, Vultr instances and load balancer, `.tech` DNS, first deploy from `v1`.
 5. ✅ `scripts/seat_qr.py`: a printable sheet of `<origin>/seat/<seat_id>` QR codes for the hardware pair.
 
 ### B3 — Accounts, topics, host, search (Meta track)
