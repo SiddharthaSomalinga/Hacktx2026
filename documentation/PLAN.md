@@ -643,3 +643,10 @@ repo, backend and API keep their existing names.
   scheduler accepts each request `DEMO_ACCEPT_S` (5) after it arrives, through the normal
   accept path (real match, seat, icebreaker). A simulated host's match ends only by expiry.
 - Off by default: without the setting, simulated hosts never receive requests (FR-31, D22).
+
+**D57 — Two independent Vultr servers with Caddy, no load balancer.** The author's call;
+replaces D36's load balancer and D37's DNS requirement. Each server (`64.177.55.143`,
+`45.32.219.190`, 1 vCPU, 2 GB, 2 GB swap) runs the same image with Caddy in front for HTTPS
+(Let's Encrypt, `<ip>.sslip.io` until a domain points at server 1). Server 1 is the public
+URL; server 2 is a hot backup at its own address. Both use Tiger Data. Deploy:
+`HOSTS="root@64.177.55.143 root@45.32.219.190" FRONTEND_DIR=. make deploy REF=origin/v2-frontendredo`.
