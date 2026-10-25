@@ -139,51 +139,52 @@ commit when green.
 
 ## Frontend checklist — software partner (`v1frontend`)
 
+Ticked for `v2-frontendredo` (D44).
+
 ### F0 — Foundations
-1. ⬜ Move the app into `frontend/` (D6, the frontend owner's call).
-2. ⬜ `vite.config.js`: React plugin, `server.proxy['/api'] = 'http://localhost:8000'`.
-3. ⬜ `src/api.js`:
+1. ⬜ Move the app into `frontend/` (D6, the frontend owner's call; kept at the root by D44).
+2. ✅ `vite.config.ts`: React plugin, `server.proxy['/api'] = 'http://localhost:8000'`.
+3. ✅ `src/api/client.ts`:
    - Every `fetch` sends cookies.
    - `{error, message}` → thrown error; handles 304 with `If-None-Match`.
-   - Maps `likely` → `likely_opening` once.
-4. ⬜ Pin dependency versions (the current `package.json` uses `"latest"`).
+4. ✅ Pin dependency versions (the current `package.json` uses `"latest"`).
 
 ### F1 — Live map (with B1)
-1. ⬜ Building list from `GET /api/buildings`, polled every `POLL_WEB_S`, colored per FR-8.
-2. ⬜ Building → floor → table view from `GET /api/buildings/:id` (shape in REQUIREMENTS §7).
+1. ✅ Building list from `GET /api/buildings`, polled every `POLL_WEB_S`, colored per FR-8.
+2. ✅ Building → floor → table view from `GET /api/buildings/:id` (shape in REQUIREMENTS §7).
 
 ### F2 — Recommendations and history (with B2)
-1. ⬜ Recommended-seat pulsing outline, distinct from every state color (FR-12), with a message per `level`; full building → nearest building.
-2. ⬜ Simulated labels (FR-13); history chart from `/history`.
-3. ⬜ Route `/seat/:seat_id` (opened by the QR codes; starts linking).
+1. ✅ Recommended-seat pulsing outline, distinct from every state color (FR-12), with a message per `level`; full building → nearest building.
+2. ✅ Simulated labels (FR-13); history chart from `/history`.
+3. ✅ Route `/seat/:seat_id` (opened by the QR codes; starts linking).
 
 ### F3 — Accounts, topic, host, search (with B3)
-1. ⬜ Demo login picker; state restored from `/api/me` on load; logout.
-2. ⬜ "What are you studying today?" with skip; quick login keeps the typed topic (FR-18); normalized label (FR-19).
-3. ⬜ Search results:
+1. ✅ Demo login picker; state restored from `/api/me` on load; logout.
+2. ✅ "What are you studying today?" with skip; quick login keeps the typed topic (FR-18); normalized label (FR-19).
+3. ✅ Search results:
    - Same-course and related groups with counts, no names.
    - Join shown only when `has_real_hosts`.
    - Empty states "No one's studying this right now" and "No one's free right now".
    - Countdown while a request is pending.
-4. ⬜ Host setup in flow order: toggle → link (tap a seat or `/seat/:id`) → topic.
-5. ⬜ Host panel: findable/hidden with `hidden_reason`, mute/unmute, the 3-hour confirm prompt.
-6. ⬜ Inbox cards: seeker's first name and major, course, table, countdown; Accept / Not now / Mute (D43).
+4. ✅ Host setup in flow order: toggle → link (tap a seat or `/seat/:id`) → topic.
+5. ✅ Host panel: findable/hidden with `hidden_reason`, mute/unmute, the 3-hour confirm prompt.
+6. ✅ Inbox cards: seeker's first name and major, course, table, countdown; Accept / Not now / Mute (D43).
 
 ### F4 — Match (with B4)
-1. ⬜ Match view for both roles: first name, building/floor/table, assigned seat, `alt_seat_id` when set, icebreaker, card image.
-2. ⬜ "I'm here", cancel, block and report on every request and match view (FR-45).
-3. ⬜ Card images pre-generated with Muse Image (one per subject plus generic; no people, no text) in `public/cards/` (U1).
-4. ⬜ *(Optional, FR-54)* "Try people studying related material?".
+1. ✅ Match view for both roles: first name, building/floor/table, assigned seat, `alt_seat_id` when set, icebreaker, card image.
+2. ✅ "I'm here", cancel, block and report on every request and match view (FR-45).
+3. ✅ Card images pre-generated with Muse Image (one per subject plus generic; no people, no text) in `public/cards/` (U1).
+4. ✅ *(Optional, FR-54)* "Try people studying related material?".
 
 ### F4.5 — PWA and push (with B4.5)
-1. ⬜ `manifest.webmanifest`, icons, theme color.
-2. ⬜ Service worker: `push` handler, `notificationclick` focuses an open window or opens `/host`, `/match/:id` or `/search/:id`; **never caches `/api`**.
-3. ⬜ Opt-in after login: VAPID key → `PushManager.subscribe` → `POST /api/push/subscribe`; unsubscribe on logout.
-4. ⬜ iOS hint: "Add to Home Screen to get requests" (FR-51).
+1. ✅ `manifest.webmanifest`, icons, theme color.
+2. ✅ Service worker: `push` handler, `notificationclick` focuses an open window or opens `/host`, `/match/:id` or `/search/:id`; **never caches `/api`**.
+3. ✅ Opt-in after login: VAPID key → `PushManager.subscribe` → `POST /api/push/subscribe`; unsubscribe on logout.
+4. ✅ iOS hint: "Add to Home Screen to get requests" (FR-51).
 
 ### F5 — Device pass
-1. ⬜ 375 px on iOS Safari and Android Chrome, in the browser and as an installed PWA (NFR-4).
-2. ⬜ All times shown in Central Time (NFR-5).
+1. ⬜ 375 px on iOS Safari and Android Chrome, in the browser and as an installed PWA (NFR-4). Checked headless at 390 px only; real devices not yet.
+2. ✅ All times shown in Central Time (NFR-5).
 
 ## Hardware checklist — hardware pair
 
@@ -624,3 +625,13 @@ generated once with Muse Image and committed with their prompts.
 - `MatchOut` gains `building_id` and `table_id`. `SearchStatusOut` gains `joined`, `label`,
   `offered_group` and `request_id`, so `/search/:id` can be rebuilt after a reload.
 - No `Cache-Control` change for `index.html`; the client reloads once on a failed chunk load.
+
+**D54 — App seat colors: occupied is blue; burnt orange is the brand.** The author's call;
+replaces D45's color mapping. In the app, open is green, occupied blue, likely opening yellow
+(dashed, with a bag), offline grey (hatched). The recommended or assigned seat (FR-12) is
+burnt orange, which no state uses. Burnt orange also marks primary actions, section labels,
+active controls and the floor-plan frame. FR-8 building colors and the FR-7 LEDs are unchanged.
+
+**D55 — The app is called Synapse.** The author's call. Every name a user sees in the v2 app
+(wordmark, page title, install name, messages, notifications) says Synapse. The project docs,
+repo, backend and API keep their existing names.
