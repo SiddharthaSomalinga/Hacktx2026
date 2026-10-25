@@ -4,9 +4,10 @@ Session log. Concrete changes, commands and observed results only.
 
 ## Current status
 
-- **Milestone:** all branches integrated in `v1final` (D40) and verified locally. Remaining:
-  Q14 (demo-table sensors), frontend F3, and the D36 Vultr deploy.
-- **Tests:** 203 pass with Postgres (`make test-db`); 174 pass and 29 skip without it. Live e2e: 114/114.
+- **Milestone:** all branches integrated in `v1final` (D40); the two-phone flow works in the
+  browser with live Muse (Session 7). Remaining: the Tiger migration for D43, Q14 (demo-table
+  sensors), and the D36 Vultr deploy.
+- **Tests:** 205 pass with Postgres (`make test-db`); 174 pass and 29 skip without it. Live e2e: 114/114 (Session 6).
 - **Open questions:** Q14 (PLAN). Q2, U1, U2 and U3 resolved.
 
 ---
@@ -450,12 +451,17 @@ Caught before committing:
   per table); only the users upsert was applied there. Tiger has no such tables.
 
 ## Next steps
-1. **Q14 (team):** a second sensed seat at the demo table, and a person sensor or a changed
+1. **Tiger migration (before any deploy of `v1final`):** on a hotspot, from `backend/`, run
+   `make db-init seed`. This adds `users.major` and seeds the majors (D43).
+2. **Q14 (team):** a second sensed seat at the demo table, and a person sensor or a changed
    demo. Without them the real table cannot host a match or show a ghost seat.
-2. **Frontend F3:** call `POST /api/search/:id/join` after a search.
 3. **Deploy (D36, D37):** the Vultr servers, load balancer and `.tech` DNS; `.env.prod`;
    `make deploy REF=origin/v1final FRONTEND_DIR=.`.
 4. **Hardware pair:** run `bridge/arduino_bridge.py` with `GHOSTSEATS_URL` and `NODE_KEY` set.
    The real key is given to them privately, never committed.
-5. **After the servers work:** fast-forward `main` to `v1final` (D40); print the QR codes for
+5. **Open UI items:**
+   - Block/report needs the other user's id in the match response (FR-45).
+   - Seat colors: the UI uses green = occupied; LEDs and FR-8 use green = open (team).
+   - The history chart's decorative curve.
+6. **After the servers work:** fast-forward `main` to `v1final` (D40); print the QR codes for
    the final domain.

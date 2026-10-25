@@ -47,7 +47,7 @@ Tracks: Best Hardware · Meta (Bringing People Closer Together with AI) · MLH B
 
 ## Current milestone
 
-Backend B0–B5 built and verified locally on Postgres + TimescaleDB (PROGRESS, Session 3). Open backend steps wait on other roles or unknowns: hardware handoff (H0), deploy (D36: Vultr setup), and the integration checkpoints IC1–IC3 with the frontend.
+All roles integrated on `v1final` (D40). The two-phone flow works end to end in the browser with live Muse, and 205 backend tests pass (PROGRESS, Sessions 5–7). Open: the Tiger migration for D43, Q14 (demo-table sensors), and the Vultr deploy (D36, D37).
 
 ## Backend checklist — Manideep (`v1backend`)
 

@@ -234,9 +234,9 @@ JSON over HTTPS. Errors: `{"error": "<code>", "message": "<sentence>"}` with a 4
 | GET /api/recommend?building_id=&floor=&table_id= | None | `floor`, `table_id` optional | `{seat_id, table_id, floor, kind, level}` with kind `open` or `likely_opening` and level `table`, `floor` or `building`; or `{full: true, nearest_building_id}` |
 | GET /api/buildings/:id/history | None | | `[{hour, open_avg}]` |
 | GET /api/demo-users | None | | `[{id, first_name, major}]` |
-| POST /api/login | None | `{user_id}` | `{id, first_name}`; sets the session cookie |
+| POST /api/login | None | `{user_id}` | `{id, first_name, major}`; sets the session cookie |
 | POST /api/logout | Login | | `{ok}`; clears the cookie |
-| GET /api/me | None | | `{user: {id, first_name} or null, host: {session_id, seat_id, label, muted, status, hidden_reason} or null, search_id or null, match_id or null}`. `status` is `findable` or `hidden`; `hidden_reason` is `needs_topic`, `away`, `muted`, `table_full`, `in_match` or `confirm_pending` |
+| GET /api/me | None | | `{user: {id, first_name, major} or null, host: {session_id, seat_id, label, muted, status, hidden_reason} or null, search_id or null, match_id or null}`. `status` is `findable` or `hidden`; `hidden_reason` is `needs_topic`, `away`, `muted`, `table_full`, `in_match` or `confirm_pending` |
 | POST /api/search | Login | `{topic_raw, group?}`; `group: "related"` only for FR-54 | `{search_id, label, course_code, subject, offered_group, has_real_hosts, same_course: [{building_id, floor, count}], related: [...]}` |
 | POST /api/search/:id/join | Login | | `{status, seconds_left}` |
 | GET /api/search/:id | Login | | `{status, seconds_left, match_id, asking}`; `asking` is `{first_name, major}` of the host holding the pending request, or null (D43) |
