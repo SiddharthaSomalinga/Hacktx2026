@@ -1,0 +1,10 @@
+{
+  "name": "Ghost Seats",
+  "short_name": "Ghost Seats",
+  "description": "Find an open seat and someone studying the same thing.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f7f2ed",
+  "theme_color": "#bf5700",
+  "icons": []
+}
