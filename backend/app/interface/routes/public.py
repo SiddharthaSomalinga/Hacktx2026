@@ -1,4 +1,4 @@
-"""Public, no-login endpoints: health, map, recommendations, history (FR-8..14, FR-49)."""
+"""Public, no-login endpoints: health, map, seats, recommendations, history (FR-8..14, FR-49)."""
 
 from __future__ import annotations
 
@@ -33,6 +33,11 @@ def buildings(request: Request, services: ServicesDep) -> Response:
 @router.get("/buildings/{building_id}", response_model=schemas.BuildingDetail)
 def building(building_id: PathId, request: Request, services: ServicesDep) -> Response:
     return _cached(request, services.map.building(building_id))
+
+
+@router.get("/seats/{seat_id}", response_model=schemas.SeatLookup)
+def seat(seat_id: PathId, services: ServicesDep) -> schemas.SeatLookup:
+    return schemas.SeatLookup.model_validate(services.map.seat(seat_id))
 
 
 @router.get("/recommend", response_model=schemas.Recommendation | schemas.BuildingFull)
