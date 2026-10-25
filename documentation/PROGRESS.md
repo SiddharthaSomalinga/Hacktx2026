@@ -8,7 +8,7 @@ Session log. Concrete changes, commands and observed results only.
   Remaining backend steps wait on other roles or unknowns (PLAN: H0 hand-off, the D36 deploy,
   U1 Muse, IC1–IC3).
 - **Tests:** 177 pass with Postgres (`make test-db`); 150 pass and 27 skip without it.
-- **Open questions:** Q2, U1, U2 (Tiger Data connection limit) (PLAN). U3 resolved: D36, D37.
+- **Open questions:** Q2, U1 (PLAN). U2 and U3 resolved.
 
 ---
 
@@ -227,9 +227,28 @@ Caught before committing:
   (`apt-get --dry-run` in `ubuntu:24.04`).
 - `shellcheck` 0.10 clean on both scripts. `make check`: 150 passed, 27 skipped.
 
+### Tiger Data (U2)
+- **Venue Wi-Fi blocks outbound database ports.** Ports 30905 (Tiger's) and 5432 timed out
+  even to an unrelated test host, while HTTPS worked. A phone hotspot fixed it. The servers
+  are not affected.
+- **Service:** Postgres **18.6** (local tests run on 16), TimescaleDB 2.31.0 and Toolkit
+  1.26.0, TLS on. `max_connections` 105, 12 reserved, 8 used by the service itself.
+- **`make db-init seed policies seed-history`:** 17 tables, `seat_readings` a compressed
+  hypertable, and compression (12 h), retention (30 days) and `rollup_open_hourly` (1 h) jobs
+  registered. 3 buildings, 98 seats, 10 users, 7,363 change rows.
+- **On Postgres 18:** `open_hourly('pcl', …)` returns hourly averages. `CALL run_job` on the
+  rollup wrote 72 rows (24 h × 3 buildings).
+- **API against Tiger:**
+  - `/api/health` → `{"ok":true,"db":true}`.
+  - Buildings, building and history all 200; 0.6–1.0 s each from the laptop on a hotspot to
+    `us-east-1`.
+  - `POST /api/readings` → `{"leds":{"t1-s1":"green"}}`; a wrong node key → 401.
+
 ### Not verified
 - `provision.sh` on a real Vultr instance (no systemd in the test container); the load
-  balancer, Auto SSL and the `.tech` DNS; Tiger Data (U2).
+  balancer, Auto SSL and the `.tech` DNS.
+- The full test suite on Postgres 18. It truncates every table, so it cannot run against the
+  Tiger service.
 
 ## Next steps
 1. **Frontend integration (IC1).** The partner merges `origin/v1backend` into their branch and

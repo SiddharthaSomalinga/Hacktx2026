@@ -47,7 +47,7 @@ Tracks: Best Hardware · Meta (Bringing People Closer Together with AI) · MLH B
 
 ## Current milestone
 
-Backend B0–B5 built and verified locally on Postgres + TimescaleDB (PROGRESS, Session 3). Open backend steps wait on other roles or unknowns: hardware handoff (H0), deploy (D36: Vultr setup and the Tiger Data service), Muse (U1), and the integration checkpoints IC1–IC3 with the frontend.
+Backend B0–B5 built and verified locally on Postgres + TimescaleDB (PROGRESS, Session 3). Open backend steps wait on other roles or unknowns: hardware handoff (H0), deploy (D36: Vultr setup), Muse (U1), and the integration checkpoints IC1–IC3 with the frontend.
 
 ## Backend checklist — Manideep (`v1backend`)
 
@@ -85,7 +85,8 @@ commit when green.
    - Test: a hand-built change log → exact `open_avg` per hour.
 4. 🚧 Deploy (D36, D37): one origin serving `frontend/dist`, two instances, and the Pi pointed at it.
    - ✅ `backend/Dockerfile`, `deploy/` (compose, provision, rolling deploy), tested locally.
-   - ⬜ Tiger Data service, Vultr instances and load balancer, `.tech` DNS, first deploy from `v1`.
+   - ✅ Tiger Data service loaded: schema, seed, policies, 24 h of history (PROGRESS, Session 4).
+   - ⬜ Vultr instances and load balancer, `.tech` DNS, first deploy from `v1`.
 5. ✅ `scripts/seat_qr.py`: a printable sheet of `<origin>/seat/<seat_id>` QR codes for the hardware pair.
 
 ### B3 — Accounts, topics, host, search (Meta track)
@@ -267,7 +268,7 @@ REQUIREMENTS §11, plus WebSockets (FR-10 specifies polling).
 | Q12 | History chart window and raw retention | Team | B2.3 | Resolved: 24 h, 30 days (hourly rollup kept) |
 | Q13 | On accept, the host's table has no open seat at that instant | Team | B4.1 | Resolved: nearest open seat on the floor; none → no assigned seat |
 | U1 | Muse Spark and Muse Image access (key, endpoint, auth, JSON mode) | Backend, from Meta sponsors | B4.7, F4.3 | **Open** |
-| U2 | Tiger Data: connection limit (sets `DB_POOL_SIZE`) | Backend | Deploy | **Open** — locally TimescaleDB 2.31 works; Toolkit no longer needed (D33) |
+| U2 | Tiger Data: connection limit (sets `DB_POOL_SIZE`) | Backend | Deploy | Resolved: `max_connections` 105 (12 reserved); 2 hosts × 2 workers × 5 = 20, so `DB_POOL_SIZE` stays 5 |
 | U3 | Deploy host (always-on, HTTPS, env vars, ≥ 2 instances) | Backend | B2.4 | Resolved: D36, D37 |
 
 ## Risks
