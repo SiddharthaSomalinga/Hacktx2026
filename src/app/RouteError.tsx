@@ -25,10 +25,10 @@ export function RouteError() {
   return (
     <main style={{ padding: 'var(--s-6) var(--s-4)', maxWidth: '40ch' }}>
       <h1>Something broke</h1>
-      <p className={s.muted}>Ghost Seats hit an unexpected error. Reloading usually fixes it.</p>
+      <p className={s.muted}>Synapse hit an unexpected error. Reloading usually fixes it.</p>
       <p style={{ marginTop: 'var(--s-4)' }}>
         <Button variant="primary" onClick={() => window.location.assign('/')}>
-          Reload Ghost Seats
+          Reload Synapse
         </Button>
       </p>
     </main>

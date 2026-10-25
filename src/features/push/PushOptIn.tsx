@@ -18,7 +18,7 @@ export function PushOptIn({ prompt }: { prompt: string }) {
     return (
       <p className={styles.row}>
         <Smartphone size={20} aria-hidden />
-        <span>To get notifications on iPhone, tap Share, then “Add to Home Screen”, and open Ghost Seats from there.</span>
+        <span>To get notifications on iPhone, tap Share, then “Add to Home Screen”, and open Synapse from there.</span>
       </p>
     )
   }

@@ -4,9 +4,9 @@ import { ApiError } from './client'
 const MESSAGES: Record<string, string> = {
   not_logged_in: 'Pick who you are to continue.',
   unknown_user: "That demo account isn't available. Pick another.",
-  building_not_found: "That building isn't in Ghost Seats.",
+  building_not_found: "That building isn't in Synapse.",
   table_not_found: "That table isn't in this building.",
-  seat_not_found: "This seat isn't in Ghost Seats. The QR code may be out of date.",
+  seat_not_found: "This seat isn't in Synapse. The QR code may be out of date.",
   seat_not_occupied: 'Sit down first — the seat needs to sense you before it can link.',
   seat_taken: 'Someone is already hosting from this seat.',
   not_linked: "You're not linked to a seat anymore.",
@@ -24,9 +24,9 @@ const MESSAGES: Record<string, string> = {
   not_your_request: 'That request belongs to another account.',
   not_in_match: "You're not part of that match.",
   confirm_not_due: 'Nothing to confirm right now.',
-  database_unavailable: "Ghost Seats is briefly offline. Try again in a few seconds.",
-  network: "Can't reach Ghost Seats. Check your connection.",
-  bad_response: "Ghost Seats sent something unexpected. Try again.",
+  database_unavailable: "Synapse is briefly offline. Try again in a few seconds.",
+  network: "Can't reach Synapse. Check your connection.",
+  bad_response: "Synapse sent something unexpected. Try again.",
   validation_error: "That didn't go through. Check what you typed and try again.",
 }
 

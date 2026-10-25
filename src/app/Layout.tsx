@@ -14,7 +14,7 @@ export function Layout() {
       <FocusProvider>
         <Canvas />
         <TopBar />
-        <Panel label="Ghost Seats">
+        <Panel label="Synapse">
           <LiveBar />
           <Outlet />
         </Panel>

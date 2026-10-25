@@ -15,7 +15,7 @@ describe('notification click targets', () => {
 
 describe('push payloads', () => {
   it('shows a generic notification for a malformed payload instead of throwing', () => {
-    expect(parsePayload('not json').title).toBe('Ghost Seats')
+    expect(parsePayload('not json').title).toBe('Synapse')
     expect(parsePayload(null).url).toBe('/')
   })
   it('keeps the backend fields', () => {

@@ -2,7 +2,7 @@
 
 export type Shown = { title: string; body: string; url: string }
 
-const FALLBACK: Shown = { title: 'Ghost Seats', body: 'Something changed. Open Ghost Seats to see it.', url: '/' }
+const FALLBACK: Shown = { title: 'Synapse', body: 'Something changed. Open Synapse to see it.', url: '/' }
 
 // The only places a notification may open: the push payload URLs in domain/notifications.py.
 const ALLOWED = /^\/(host|match\/[\w-]{1,64}|search\/[\w-]{1,64})$/
