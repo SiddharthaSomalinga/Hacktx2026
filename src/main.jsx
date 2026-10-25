@@ -1,185 +1,114 @@
-import { StrictMode, useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import {
-  ArrowUpRight,
-  BookOpen,
-  ChevronDown,
-  CircleHelp,
-  Clock3,
-  Coffee,
-  Compass,
-  HeartHandshake,
-  MapPin,
-  Menu,
-  Search,
-  ShieldCheck,
-  Sparkles,
-  Users,
-  X,
+  ArrowUpRight, Bell, BookOpen, Check, ChevronDown, Clock3, Compass,
+  MapPin, Menu, MessageCircle, Search, Send, Sparkles, UserRound, Users, X, Zap,
 } from 'lucide-react'
+import { api } from './api'
 import './styles.css'
 
-const buildings = [
-  { id: 'pcl', name: 'PCL Library', short: 'PCL', floor: '2nd floor', seats: 148, open: 62, likely: 19, accent: 'sage', note: 'Best availability' },
-  { id: 'wel', name: 'WEL Library', short: 'WEL', floor: '1st floor', seats: 96, open: 21, likely: 14, accent: 'coral', note: 'Filling up' },
-  { id: 'gdc', name: 'GDC Study Hall', short: 'GDC', floor: '3rd floor', seats: 74, open: 46, likely: 8, accent: 'gold', note: 'Simulated', simulated: true },
+const seedBuildings = [
+  { id: 'pcl', name: 'PCL Library', short: 'P', distance: '4 min walk', floors: 4, open: 62, total: 104, status: 'live', color: 'green', location: 'East Mall' },
+  { id: 'union', name: 'Texas Union', short: 'U', distance: '7 min walk', floors: 3, open: 28, total: 61, status: 'live', color: 'blue', location: '21st Street' },
+  { id: 'gdc', name: 'GDC Study Hall', short: 'G', distance: '9 min walk', floors: 2, open: 41, total: 78, status: 'simulated', color: 'yellow', location: 'Robert Dedman Dr' },
+  { id: 'sac', name: 'Student Activity Center', short: 'S', distance: '12 min walk', floors: 2, open: 19, total: 54, status: 'simulated', color: 'coral', location: 'Robert Dedman Dr' },
 ]
 
-const initialSeats = [
-  { id: 'a1', number: 'A1', status: 'open', x: 13, y: 22 },
-  { id: 'a2', number: 'A2', status: 'occupied', x: 25, y: 22 },
-  { id: 'a3', number: 'A3', status: 'likely', x: 37, y: 22 },
-  { id: 'a4', number: 'A4', status: 'open', x: 49, y: 22 },
-  { id: 'a5', number: 'A5', status: 'open', x: 61, y: 22 },
-  { id: 'a6', number: 'A6', status: 'offline', x: 73, y: 22 },
-  { id: 'b1', number: 'B1', status: 'occupied', x: 13, y: 57 },
-  { id: 'b2', number: 'B2', status: 'open', x: 25, y: 57 },
-  { id: 'b3', number: 'B3', status: 'open', x: 37, y: 57 },
-  { id: 'b4', number: 'B4', status: 'likely', x: 49, y: 57 },
-  { id: 'b5', number: 'B5', status: 'open', x: 61, y: 57 },
-  { id: 'b6', number: 'B6', status: 'occupied', x: 73, y: 57 },
+const seedSeats = [
+  ['A1', 'open'], ['A2', 'occupied'], ['A3', 'open'], ['A4', 'likely'], ['A5', 'open'], ['A6', 'away'],
+  ['B1', 'open'], ['B2', 'open'], ['B3', 'occupied'], ['B4', 'open'], ['B5', 'offline'], ['B6', 'open'],
+  ['C1', 'likely'], ['C2', 'open'], ['C3', 'open'], ['C4', 'occupied'], ['C5', 'open'], ['C6', 'open'],
+  ['D1', 'open'], ['D2', 'away'], ['D3', 'open'], ['D4', 'open'], ['D5', 'likely'], ['D6', 'open'],
 ]
-
-const statusMeta = {
-  open: { label: 'Open', className: 'open' },
-  occupied: { label: 'Occupied', className: 'occupied' },
-  likely: { label: 'Likely opening', className: 'likely' },
-  offline: { label: 'Offline', className: 'offline' },
-}
 
 function App() {
-  const [selectedBuilding, setSelectedBuilding] = useState('pcl')
-  const [seats, setSeats] = useState(initialSeats)
+  const [view, setView] = useState('map')
+  const [buildings, setBuildings] = useState(seedBuildings)
+  const [selectedBuilding, setSelectedBuilding] = useState(seedBuildings[0])
+  const [selectedSeat, setSelectedSeat] = useState(null)
+  const [floor, setFloor] = useState(2)
+  const [query, setQuery] = useState('')
   const [topic, setTopic] = useState('')
-  const [normalizedTopic, setNormalizedTopic] = useState('')
-  const [isHost, setIsHost] = useState(false)
-  const [showMenu, setShowMenu] = useState(false)
-  const [toast, setToast] = useState('')
-  const [selectedSeat, setSelectedSeat] = useState('a1')
-
-  const building = buildings.find((item) => item.id === selectedBuilding) ?? buildings[0]
+  const [user, setUser] = useState(null)
+  const [notice, setNotice] = useState('')
+  const [showLogin, setShowLogin] = useState(false)
+  const [showTopic, setShowTopic] = useState(false)
+  const [showSearch, setShowSearch] = useState(false)
+  const [hostOpen, setHostOpen] = useState(false)
+  const [hostLinked, setHostLinked] = useState(false)
+  const [searching, setSearching] = useState(false)
+  const [match, setMatch] = useState(null)
+  const [inbox, setInbox] = useState([{ id: 1, name: 'Maya', course: 'CH 320M', table: 'PCL · Floor 2', expires: '02:41' }])
 
   useEffect(() => {
-    const timer = setInterval(() => {
-      setSeats((current) => current.map((seat, index) => {
-        if (index !== 0 && index !== 3) return seat
-        return { ...seat, status: seat.status === 'open' ? 'likely' : 'open' }
-      }))
-    }, 9000)
-    return () => clearInterval(timer)
+    api.me().then((data) => data?.first_name && setUser(data)).catch(() => {})
+    api.buildings().then((data) => data?.length && setBuildings(data)).catch(() => {})
+    const interval = window.setInterval(() => api.buildings().then((data) => data?.length && setBuildings(data)).catch(() => {}), 15000)
+    if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {})
+    return () => window.clearInterval(interval)
   }, [])
 
-  function announce(message) {
-    setToast(message)
-    window.setTimeout(() => setToast(''), 3600)
+  useEffect(() => {
+    if (!notice) return undefined
+    const timeout = window.setTimeout(() => setNotice(''), 3200)
+    return () => window.clearTimeout(timeout)
+  }, [notice])
+
+  const filteredBuildings = buildings.filter((building) => `${building.name} ${building.location}`.toLowerCase().includes(query.toLowerCase()))
+  const openSeats = useMemo(() => seedSeats.filter(([, status]) => status === 'open').length, [])
+
+  function chooseBuilding(building) { setSelectedBuilding(building); setView('map'); setNotice(`${building.name} selected`) }
+  function login(name) {
+    const nextUser = { id: name.toLowerCase(), first_name: name, topic: '' }
+    setUser(nextUser); setShowLogin(false); setShowTopic(true); api.login(nextUser).catch(() => {})
   }
-
-  function handleTopicSubmit(event) {
-    event.preventDefault()
-    if (!topic.trim()) return
-    setNormalizedTopic(topic.toLowerCase().includes('320') || topic.toLowerCase().includes('orgo')
-      ? 'CH 320M · Organic Chemistry I'
-      : `${topic.trim()} · Topic match ready`)
-    announce('Topic normalized. 7 compatible study partners nearby.')
+  function saveTopic() { if (user) setUser({ ...user, topic: topic.trim() }); setShowTopic(false); setNotice(topic.trim() ? `Studying ${topic.trim()}` : 'Topic skipped') }
+  function startSearch() {
+    setSearching(true); setShowSearch(false); setNotice('Looking for someone nearby')
+    window.setTimeout(() => { setSearching(false); setMatch({ name: 'Maya', topic: topic || 'organic chemistry', building: 'PCL Library', seat: 'A4', icebreaker: 'What reaction mechanism has been the most surprising so far?' }); setView('match') }, 1100)
   }
+  function logout() { setUser(null); api.logout().catch(() => {}); setNotice('Signed out') }
 
-  function handleBuildingChange(id) {
-    setSelectedBuilding(id)
-    setSelectedSeat('a1')
-    announce(`Showing ${buildings.find((item) => item.id === id)?.name}`)
-  }
-
-  function requestMatch() {
-    announce('Request sent. We’ll let you know when they accept.')
-  }
-
-  return (
-    <div className="app-shell">
-      <header className="topbar">
-        <a className="brand" href="#top" aria-label="Ghost Seats home">
-          <span className="brand-mark"><span /></span>
-          <span>ghost <strong>seats</strong></span>
-        </a>
-        <nav className="desktop-nav" aria-label="Main navigation">
-          <a className="active" href="#map">Find a seat</a>
-          <a href="#matches">Study matches <span className="nav-dot" /></a>
-          <a href="#about">How it works</a>
-        </nav>
-        <div className="top-actions">
-          <button className="icon-button help-button" aria-label="Help"><CircleHelp size={18} /></button>
-          <button className="user-button" onClick={() => announce('Demo login picker coming next.')}>Siddhartha <ChevronDown size={15} /></button>
-          <button className="icon-button menu-button" aria-label="Open menu" onClick={() => setShowMenu(!showMenu)}><Menu size={19} /></button>
-        </div>
-        {showMenu && <div className="mobile-menu"><a href="#map">Find a seat</a><a href="#matches">Study matches</a><a href="#about">How it works</a></div>}
-      </header>
-
-      <main id="top">
-        <section className="intro-band">
-          <div className="intro-copy">
-            <div className="eyebrow"><span className="live-pip" /> Live across UT Austin</div>
-            <h1>Find a seat.<br /><em>Find your people.</em></h1>
-            <p>See what’s actually open, then find someone studying the same thing. No wandering. No awkward cold starts.</p>
-          </div>
-          <form className="topic-card" onSubmit={handleTopicSubmit}>
-            <div className="topic-card-heading"><Sparkles size={18} /><span>What are you studying today?</span><span className="optional">Optional</span></div>
-            <div className="topic-input-wrap">
-              <input value={topic} onChange={(event) => setTopic(event.target.value)} placeholder="Try “orgo 1 exam prep”" aria-label="What are you studying today" />
-              <button aria-label="Search for study matches" type="submit"><ArrowUpRight size={19} /></button>
-            </div>
-            {normalizedTopic ? <div className="normalized"><span>✦</span> {normalizedTopic}</div> : <div className="topic-hint">Skip for now <span>→</span></div>}
-          </form>
-        </section>
-
-        <section className="workspace" id="map">
-          <aside className="building-sidebar">
-            <div className="section-kicker">Nearby buildings <span>Updated just now</span></div>
-            <div className="building-list">
-              {buildings.map((item) => (
-                <button className={`building-item ${selectedBuilding === item.id ? 'selected' : ''}`} key={item.id} onClick={() => handleBuildingChange(item.id)}>
-                  <span className={`building-icon ${item.accent}`}>{item.short.slice(0, 1)}</span>
-                  <span className="building-info"><strong>{item.name}</strong><small>{item.floor} {item.simulated && <span className="simulated-tag">Simulated</span>}</small></span>
-                  <span className="building-count"><strong>{item.open}</strong><small>open</small></span>
-                </button>
-              ))}
-            </div>
-            <div className="side-rule" />
-            <div className="availability-note"><div className="note-icon"><Compass size={17} /></div><div><strong>Want the best shot?</strong><p>Try <b>GDC Study Hall</b> — 62% of seats are open right now.</p></div></div>
-            <button className="outline-button" onClick={() => announce('All buildings are available in the full map view.')}>View all buildings <ArrowUpRight size={16} /></button>
-          </aside>
-
-          <section className="map-panel">
-            <div className="map-heading"><div><div className="section-kicker">Seat map</div><h2>{building.name} <span className="live-status"><span /> Live</span></h2><p>{building.floor} · <span className="simulated-copy">{building.simulated ? 'Simulated building' : 'Occupancy from seat nodes'}</span></p></div><button className="floor-select">Floor 2 <ChevronDown size={15} /></button></div>
-            <div className="map-canvas" aria-label={`${building.name} seat map`}>
-              <div className="map-label label-north">Windows</div><div className="map-label label-south">Quiet zone</div><div className="map-door door-one">ENTRY</div><div className="map-door door-two">STAIRS</div>
-              <div className="table-shape table-one"><span>Table 01</span></div><div className="table-shape table-two"><span>Table 02</span></div>
-              {seats.map((seat) => <button key={seat.id} className={`seat-marker ${statusMeta[seat.status].className} ${selectedSeat === seat.id ? 'selected' : ''}`} style={{ left: `${seat.x}%`, top: `${seat.y}%` }} onClick={() => setSelectedSeat(seat.id)} aria-label={`${seat.number}: ${statusMeta[seat.status].label}`}><span>{seat.number}</span></button>)}
-              <div className="map-pin"><MapPin size={14} fill="currentColor" /><span>You are here</span></div>
-            </div>
-            <div className="map-footer"><div className="legend"><span><i className="legend-dot open" /> Open <b>{building.open}</b></span><span><i className="legend-dot likely" /> Likely opening <b>{building.likely}</b></span><span><i className="legend-dot occupied" /> Occupied</span><span><i className="legend-dot offline" /> Offline</span></div><span className="refresh-label"><Clock3 size={14} /> Refreshes every 3 sec</span></div>
-          </section>
-        </section>
-
-        <section className="lower-grid" id="matches">
-          <div className="recommendation-panel">
-            <div className="section-kicker">Recommended for you</div><h2>There’s room at the table.</h2><p>Seat <b>A1</b> at PCL is open now, with two compatible study sessions nearby.</p>
-            <div className="recommendation-seat"><div className="seat-illustration"><span>A1</span></div><div><strong>PCL · 2nd floor · Table 01</strong><small>Quiet corner · Power nearby</small></div><button onClick={() => { setSelectedSeat('a1'); announce('Seat A1 selected.') }} aria-label="Select recommended seat"><ArrowUpRight size={18} /></button></div>
-          </div>
-          <div className="host-panel"><div className="host-heading"><div className="host-icon"><Users size={19} /></div><div><div className="section-kicker">Host mode</div><h2>Open to studying together?</h2></div><button className={`toggle ${isHost ? 'on' : ''}`} onClick={() => { setIsHost(!isHost); announce(isHost ? 'Host mode turned off.' : 'Host mode is on. You are discoverable.') }} aria-label="Toggle host mode"><span /></button></div><p>Let nearby students know you’re open to a low-key study partner. You stay in control.</p><div className="host-footer"><span><ShieldCheck size={15} /> Names stay private until you accept</span><button onClick={() => setIsHost(!isHost)}>{isHost ? 'Turn off host mode' : 'Turn on host mode'} <ArrowUpRight size={15} /></button></div></div>
-        </section>
-
-        <section className="match-strip" id="about"><div className="match-strip-copy"><span className="match-kicker"><HeartHandshake size={16} /> Built for the study break</span><h2>Same library. Same class.<br /><em>Maybe the same problem set.</em></h2><p>Ghost Seats pairs open seats with real study intent, so finding a person to work with feels as easy as finding a place to sit.</p></div><div className="match-preview"><div className="preview-header"><span className="avatar avatar-coral">M</span><div><strong>Organic Chemistry I</strong><small>Table 01 · 2 min away</small></div><span className="match-score">94% match</span></div><div className="preview-quote">“Comparing R/S configurations on Problem 4?”</div><button className="preview-action" onClick={requestMatch}>Request to study <ArrowUpRight size={16} /></button></div></section>
-      </main>
-
-      <footer><span>ghost seats / UT Austin</span><span>Privacy first · No images or audio stored</span><span>Built for the library regulars</span></footer>
-      {toast && <div className="toast"><Sparkles size={16} /> {toast}<button onClick={() => setToast('')} aria-label="Dismiss notification"><X size={14} /></button></div>}
-    </div>
-  )
+  return <div className="app-shell">
+    <header className="topbar">
+      <button className="brand" onClick={() => setView('map')} aria-label="Ghost Seats home"><span className="brand-mark"><span /></span><span>ghost seats</span></button>
+      <nav className="desktop-nav" aria-label="Primary navigation"><button className={view === 'map' ? 'nav-link active' : 'nav-link'} onClick={() => setView('map')}>Find a seat</button><button className={view === 'history' ? 'nav-link active' : 'nav-link'} onClick={() => setView('history')}>History</button><button className={view === 'host' ? 'nav-link active' : 'nav-link'} onClick={() => setView('host')}>Host mode</button></nav>
+      <div className="top-actions"><button className="icon-button notification-button" onClick={() => setView('inbox')} aria-label="Open inbox"><Bell size={18} />{inbox.length > 0 && <i />}</button>{user ? <button className="profile-chip" onClick={() => setView('host')}><span>{user.first_name[0]}</span>{user.first_name}<ChevronDown size={14} /></button> : <button className="login-button" onClick={() => setShowLogin(true)}>Log in <ArrowUpRight size={16} /></button>}<button className="mobile-menu icon-button" aria-label="Open navigation"><Menu size={20} /></button></div>
+    </header>
+    {view === 'map' && <MapView buildings={filteredBuildings} selectedBuilding={selectedBuilding} chooseBuilding={chooseBuilding} floor={floor} setFloor={setFloor} selectedSeat={selectedSeat} setSelectedSeat={setSelectedSeat} query={query} setQuery={setQuery} openSeats={openSeats} />}
+    {view === 'history' && <HistoryView building={selectedBuilding} />}
+    {view === 'host' && <HostView user={user} hostOpen={hostOpen} setHostOpen={setHostOpen} hostLinked={hostLinked} setHostLinked={setHostLinked} setSelectedSeat={setSelectedSeat} onLogin={() => setShowLogin(true)} />}
+    {view === 'inbox' && <InboxView inbox={inbox} setInbox={setInbox} onMatch={(request) => { setMatch({ name: request.name, topic: request.course, building: 'PCL Library', seat: 'B4', icebreaker: 'What part of this class are you enjoying most?' }); setView('match') }} />}
+    {view === 'match' && <MatchView match={match} onBack={() => setView('map')} onDone={() => { setMatch(null); setView('map'); setNotice('Match closed') }} />}
+    <section className="action-strip"><div><span className="eyebrow">Make the next hour count</span><strong>Find a study partner who is already here.</strong></div><button className="primary-button" onClick={() => user ? setShowSearch(true) : setShowLogin(true)}><Users size={17} /> Find someone <ArrowUpRight size={16} /></button></section>
+    <footer className="footer"><span>Ghost Seats · UT Austin</span><span>Live occupancy · Central Time</span><span><Compass size={14} /> Built for the in-between moments</span></footer>
+    {showLogin && <Modal title="Welcome to Ghost Seats" onClose={() => setShowLogin(false)}><p className="modal-copy">Choose a demo identity to explore the seeker and host flows.</p><div className="identity-list">{['Alex', 'Maya', 'Jordan'].map((name) => <button key={name} className="identity-row" onClick={() => login(name)}><span className="avatar">{name[0]}</span><span><strong>{name}</strong><small>UT Austin student</small></span><ArrowUpRight size={16} /></button>)}</div></Modal>}
+    {showTopic && <Modal title="What are you studying today?" onClose={() => setShowTopic(false)}><p className="modal-copy">A topic helps us find a useful match. You can skip this for now.</p><div className="topic-input"><BookOpen size={18} /><input autoFocus value={topic} onChange={(event) => setTopic(event.target.value)} placeholder="e.g. organic chemistry" onKeyDown={(event) => event.key === 'Enter' && saveTopic()} /></div><div className="modal-actions"><button className="quiet-button" onClick={() => { setShowTopic(false); setNotice('Topic skipped') }}>Skip for now</button><button className="primary-button" onClick={saveTopic}>Save topic <Check size={16} /></button></div></Modal>}
+    {showSearch && <Modal title="Find someone studying nearby" onClose={() => setShowSearch(false)}><p className="modal-copy">We’ll look for a real host in the same subject group. No names appear until you both accept.</p><div className="search-topic"><label>Subject</label><strong>{user?.topic || 'Anything goes'}</strong><span>Same course first, related topics second</span></div><div className="modal-actions"><button className="quiet-button" onClick={() => setShowSearch(false)}>Not now</button><button className="primary-button" onClick={startSearch}>{searching ? 'Searching...' : 'Start looking'} <Send size={15} /></button></div></Modal>}
+    {notice && <div className="toast"><Check size={15} />{notice}</div>}
+  </div>
 }
+
+function MapView({ buildings, selectedBuilding, chooseBuilding, floor, setFloor, selectedSeat, setSelectedSeat, query, setQuery, openSeats }) {
+  return <main><section className="hero"><div className="hero-copy"><span className="eyebrow"><span className="live-dot" /> Austin campus · updated just now</span><h1>Start anywhere.<br /><em>Find your table.</em></h1><p>See what’s actually open, then find someone studying the same thing.<br />No wandering. No awkward cold starts.</p></div><div className="hero-note"><Sparkles size={17} /><span><strong>{openSeats} open seats</strong><br />across the campus right now</span></div></section>
+    <section className="campus-section"><div className="section-heading"><div><span className="eyebrow">Campus map <span className="muted-separator">/</span> UT Austin · Main campus</span><h2>Start anywhere on campus.</h2><p>Search a building to jump from the quad to its live classroom map.</p></div><div className="search-box"><Search size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search buildings, libraries..." /><kbd>⌘ K</kbd></div></div><div className="map-stage"><div className="map-grid" /><div className="map-water" /><div className="map-road road-a" /><div className="map-road road-b" /><div className="map-block block-a" /><div className="map-block block-b" /><div className="map-block block-c" /><div className="map-label label-gdc" onClick={() => chooseBuilding(buildings.find((b) => b.id === 'gdc') || selectedBuilding)}>GDC Study Hall</div><div className="map-label label-union" onClick={() => chooseBuilding(buildings.find((b) => b.id === 'union') || selectedBuilding)}>Texas Union</div><div className="map-label label-pcl" onClick={() => chooseBuilding(buildings.find((b) => b.id === 'pcl') || selectedBuilding)}>PCL Library</div><div className="map-label label-sac" onClick={() => chooseBuilding(buildings.find((b) => b.id === 'sac') || selectedBuilding)}>Student Activity Center</div><div className="map-center"><MapPin size={14} /> Select a building marker to zoom in</div><div className="map-controls"><button>+</button><button>−</button><button><Compass size={16} /></button></div><span className="map-attribution">Map view · campus occupancy</span></div><div className="map-legend"><span><i className="legend-live" /> Live building data</span><span><i className="legend-simulated" /> Simulated building</span><span className="map-scale">500 ft <b /></span></div></section>
+    <section className="workspace"><aside className="building-list"><div className="list-heading"><span className="eyebrow">Nearby buildings</span><span>Updated just now</span></div>{buildings.map((building) => <button className={`building-row ${selectedBuilding.id === building.id ? 'selected' : ''}`} key={building.id} onClick={() => chooseBuilding(building)}><span className={`building-icon ${building.color}`}>{building.short}</span><span className="building-meta"><strong>{building.name}</strong><small>{building.distance} · {building.floors} floors</small></span><span className="building-count"><strong>{building.open}</strong><small>open</small></span></button>)}</aside><SeatMap building={selectedBuilding} floor={floor} setFloor={setFloor} selectedSeat={selectedSeat} setSelectedSeat={setSelectedSeat} /></section></main>
+}
+
+function SeatMap({ building, floor, setFloor, selectedSeat, setSelectedSeat }) {
+  return <div className="seat-panel"><div className="seat-heading"><div><span className="eyebrow">Seat map <span className="live-pill"><span /> Live</span></span><h2>{building.name}</h2><p>{floor}nd floor <span>·</span> Occupancy from seat nodes</p></div><label className="floor-select">Floor {floor}<select value={floor} onChange={(event) => setFloor(Number(event.target.value))}>{Array.from({ length: building.floors }, (_, index) => <option key={index + 1} value={index + 1}>Floor {index + 1}</option>)}</select><ChevronDown size={15} /></label></div><div className="seat-toolbar"><span><i className="seat-key open" />Open <strong>18</strong></span><span><i className="seat-key occupied" />Occupied <strong>4</strong></span><span><i className="seat-key likely" />Likely open <strong>2</strong></span><span className="toolbar-note">Click a seat for details</span></div><div className="seat-canvas"><div className="table-label label-one">Window bar</div><div className="table-label label-two">Group tables</div><div className="seat-grid">{seedSeats.map(([id, status]) => <button key={id} className={`seat ${status} ${selectedSeat === id ? 'selected' : ''}`} onClick={() => setSelectedSeat(id)}><span>{id}</span>{status === 'open' && <i />}</button>)}</div><div className="seat-annotation"><Zap size={14} /> Seats pulse when a recommendation is ready</div></div>{selectedSeat && <div className="seat-detail"><div><span className={`seat-status ${seedSeats.find(([id]) => id === selectedSeat)?.[1]}`}>{selectedSeat}</span><strong>{selectedSeat === 'A4' ? 'Recommended for you' : 'Table seat'}</strong><small>{selectedSeat === 'A4' ? 'Good light · quiet corner · likely open' : 'Floor 2 · Group tables'}</small></div><button className="primary-button small" onClick={() => setSelectedSeat(null)}>Close <X size={14} /></button></div>}</div>
+}
+
+function HistoryView({ building }) { return <main className="simple-page"><span className="eyebrow">Seat history · last 24 hours</span><h1>When is {building.name} easiest to find?</h1><p className="lede">A quiet pattern is more useful than a perfect guess.</p><div className="history-card"><div className="chart-meta"><span>Average open seats</span><strong>54 <small>seats</small></strong><em>+12% vs yesterday</em></div><div className="chart"><div className="chart-line" /><div className="chart-area" />{['12am', '4am', '8am', '12pm', '4pm', '8pm', 'now'].map((label) => <span key={label}>{label}</span>)}</div></div><div className="history-insight"><Sparkles size={18} /><div><strong>Your best window is 2:00–4:00 PM.</strong><span>There are usually 16 more open seats than the daily average.</span></div></div></main> }
+
+function HostView({ user, hostOpen, setHostOpen, hostLinked, setHostLinked, setSelectedSeat, onLogin }) { return <main className="simple-page host-page"><span className="eyebrow">Host mode</span><h1>Make your seat easier<br /><em>to find.</em></h1><p className="lede">Let one person studying something similar join you. You’re always in control.</p>{!user ? <div className="empty-state"><UserRound size={25} /><strong>Log in to become a host.</strong><span>Your identity stays private until you accept a request.</span><button className="primary-button" onClick={onLogin}>Log in <ArrowUpRight size={15} /></button></div> : <div className="host-card"><div className="host-card-top"><div><span className="status-badge"><span className={hostOpen ? 'on' : ''} />{hostOpen ? 'Findable' : 'Hidden'}</span><h2>{hostOpen ? 'Your seat is visible.' : 'You are off the map.'}</h2><p>{hostOpen ? 'We’ll only send one request at a time.' : 'Turn on host mode when you’re ready.'}</p></div><button className={`toggle ${hostOpen ? 'on' : ''}`} onClick={() => setHostOpen(!hostOpen)} aria-label="Toggle host mode"><span /></button></div><div className="host-steps"><div className={hostLinked ? 'host-step complete' : 'host-step'}><span>{hostLinked ? <Check size={15} /> : '1'}</span><div><strong>Link your seat</strong><small>{hostLinked ? 'PCL Library · Floor 2 · A4' : 'Tap a seat on the map to link it'}</small></div>{!hostLinked && <button className="text-button" onClick={() => { setHostLinked(true); setSelectedSeat('A4') }}>Link seat <ArrowUpRight size={14} /></button>}</div><div className="host-step"><span>2</span><div><strong>Choose a topic</strong><small>{user.topic || 'Add what you’re studying today'}</small></div><button className="text-button">Edit <ArrowUpRight size={14} /></button></div></div></div>}</main> }
+
+function InboxView({ inbox, setInbox, onMatch }) { return <main className="simple-page inbox-page"><div className="page-topline"><div><span className="eyebrow">Inbox</span><h1>People looking for a table.</h1></div><span className="count-badge">{inbox.length} pending</span></div><p className="lede">Requests expire after three minutes so no one waits around.</p>{inbox.length ? <div className="request-list">{inbox.map((request) => <article className="request-card" key={request.id}><div className="request-avatar">{request.name[0]}</div><div className="request-content"><span className="request-time"><Clock3 size={13} /> expires in {request.expires}</span><h2>{request.name} is studying {request.course}</h2><p>They’re at {request.table} and would like to find a focused seat nearby.</p><div className="request-actions"><button className="primary-button small" onClick={() => onMatch(request)}><Check size={14} /> Accept</button><button className="quiet-button" onClick={() => setInbox(inbox.filter((item) => item.id !== request.id))}>Not now</button><button className="icon-button" aria-label="Mute request"><Bell size={15} /></button></div></div></article>)}</div> : <div className="empty-state"><MessageCircle size={25} /><strong>No requests right now.</strong><span>Keep this tab open while you study.</span></div>}</main> }
+
+function MatchView({ match, onBack, onDone }) { if (!match) return null; return <main className="match-page"><button className="back-button" onClick={onBack}>← Back to map</button><div className="match-intro"><span className="eyebrow"><span className="live-dot" /> You found a match</span><h1>Make the first hello<br /><em>feel easy.</em></h1><p>Your table is waiting at PCL Library.</p></div><div className="match-card"><div className="match-card-head"><span className="match-spark"><Sparkles size={18} /></span><span>Ghost Seats introduction</span><span className="match-time">Just now</span></div><div className="match-person"><div className="large-avatar">{match.name[0]}</div><div><span>Say hello to</span><h2>{match.name}</h2><p>Studying {match.topic}</p></div></div><div className="match-details"><div><MapPin size={16} /><span><small>Meet at</small><strong>{match.building} · Floor 2 · Seat {match.seat}</strong></span></div><div><MessageCircle size={16} /><span><small>Try this opener</small><strong>{match.icebreaker}</strong></span></div></div><div className="match-actions"><button className="primary-button" onClick={onDone}><Check size={16} /> I’m here</button><button className="quiet-button" onClick={onDone}>Cancel match</button><button className="report-button">Block or report</button></div></div></main> }
+
+function Modal({ title, onClose, children }) { return <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()}><div className="modal"><button className="modal-close icon-button" onClick={onClose} aria-label="Close"><X size={18} /></button><span className="eyebrow">Ghost Seats</span><h2>{title}</h2>{children}</div></div> }
 
 export default App
 
-createRoot(document.getElementById('root')).render(
-  <StrictMode>
-    <App />
-  </StrictMode>,
-)
+createRoot(document.getElementById('root')).render(<App />)
