@@ -1,6 +1,6 @@
 const int IR_SENSOR_PIN = 2;  // IR Sensor plugged into D2
-const int GREEN_LED_PIN = A1; // Green LED on A1 (TRUE = OCCUPIED)
-const int BLUE_LED_PIN  = A2; // Blue LED on A2 (FALSE = NOT OCCUPIED)
+const int GREEN_LED_PIN = A1; // Green LED on A1 (FALSE = NOT OCCUPIED / Open)
+const int BLUE_LED_PIN  = A2; // Blue LED on A2 (TRUE = OCCUPIED / Taken)
 
 // Stability filter for extended IR range (prevents flickering)
 const int STABLE_THRESHOLD = 3; 
@@ -44,13 +44,13 @@ void loop() {
 void updateLEDs(bool is_occupied) {
   if (is_occupied) {
     // TRUE: Object in range (Red sensor light ON) -> Space is OCCUPIED
-    digitalWrite(GREEN_LED_PIN, HIGH); // A1 (Green) ON
-    digitalWrite(BLUE_LED_PIN, LOW);   // A2 (Blue) OFF
-    Serial.println("occupied: true  -> OCCUPIED (A1 Green ON, A2 Blue OFF)");
+    digitalWrite(BLUE_LED_PIN, HIGH);  // A2 (Blue) ON
+    digitalWrite(GREEN_LED_PIN, LOW);  // A1 (Green) OFF
+    Serial.println("occupied: true  -> OCCUPIED (A2 Blue ON, A1 Green OFF)");
   } else {
     // FALSE: Nothing in range (Red sensor light OFF) -> Space is NOT OCCUPIED
-    digitalWrite(GREEN_LED_PIN, LOW);  // A1 (Green) OFF
-    digitalWrite(BLUE_LED_PIN, HIGH);  // A2 (Blue) ON
-    Serial.println("occupied: false -> NOT OCCUPIED (A1 Green OFF, A2 Blue ON)");
+    digitalWrite(BLUE_LED_PIN, LOW);   // A2 (Blue) OFF
+    digitalWrite(GREEN_LED_PIN, HIGH); // A1 (Green) ON
+    Serial.println("occupied: false -> NOT OCCUPIED (A1 Green ON, A2 Blue OFF)");
   }
 }
