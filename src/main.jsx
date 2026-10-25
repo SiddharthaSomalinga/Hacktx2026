@@ -1,11 +1,13 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
+import * as maplibregl from 'maplibre-gl'
 import {
   ArrowUpRight, Bell, BookOpen, Check, ChevronDown, Clock3, Compass,
-  MapPin, Menu, MessageCircle, Search, Send, Sparkles, UserRound, Users, X, Zap,
+  MapPin, Menu, MessageCircle, Moon, Search, Send, Sparkles, Sun, UserRound, Users, X, Zap,
 } from 'lucide-react'
 import { api } from './api'
 import './styles.css'
+import 'maplibre-gl/dist/maplibre-gl.css'
 
 const seedBuildings = [
   { id: 'pcl', name: 'PCL Library', short: 'P', distance: '4 min walk', floors: 4, open: 62, total: 104, status: 'live', color: 'green', location: 'East Mall' },
@@ -41,6 +43,12 @@ function App() {
   const [searching, setSearching] = useState(false)
   const [match, setMatch] = useState(null)
   const [inbox, setInbox] = useState([{ id: 1, name: 'Maya', course: 'CH 320M', table: 'PCL · Floor 2', expires: '02:41' }])
+  const [darkMode, setDarkMode] = useState(() => window.localStorage.getItem('ghost-seats-theme') === 'dark')
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = darkMode ? 'dark' : 'light'
+    window.localStorage.setItem('ghost-seats-theme', darkMode ? 'dark' : 'light')
+  }, [darkMode])
 
   useEffect(() => {
     api.me().then((data) => data?.user && setUser(data.user)).catch(() => {})
@@ -114,7 +122,7 @@ function App() {
     <header className="topbar">
       <button className="brand" onClick={() => setView('map')} aria-label="Ghost Seats home"><span className="brand-mark"><span /></span><span>ghost seats</span></button>
       <nav className="desktop-nav" aria-label="Primary navigation"><button className={view === 'map' ? 'nav-link active' : 'nav-link'} onClick={() => setView('map')}>Find a seat</button><button className={view === 'history' ? 'nav-link active' : 'nav-link'} onClick={() => setView('history')}>History</button><button className={view === 'host' ? 'nav-link active' : 'nav-link'} onClick={() => setView('host')}>Host mode</button></nav>
-      <div className="top-actions"><button className="icon-button notification-button" onClick={() => setView('inbox')} aria-label="Open inbox"><Bell size={18} />{inbox.length > 0 && <i />}</button>{user ? <button className="profile-chip" onClick={() => setView('host')}><span>{user.first_name[0]}</span>{user.first_name}<ChevronDown size={14} /></button> : <button className="login-button" onClick={() => setShowLogin(true)}>Log in <ArrowUpRight size={16} /></button>}<button className="mobile-menu icon-button" aria-label="Open navigation"><Menu size={20} /></button></div>
+      <div className="top-actions"><button className="icon-button theme-button" onClick={() => setDarkMode((current) => !current)} aria-label={darkMode ? 'Switch to light mode' : 'Switch to dark mode'} title={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}>{darkMode ? <Sun size={18} /> : <Moon size={18} />}</button><button className="icon-button notification-button" onClick={() => setView('inbox')} aria-label="Open inbox"><Bell size={18} />{inbox.length > 0 && <i />}</button>{user ? <button className="profile-chip" onClick={() => setView('host')}><span>{user.first_name[0]}</span>{user.first_name}<ChevronDown size={14} /></button> : <button className="login-button" onClick={() => setShowLogin(true)}>Log in <ArrowUpRight size={16} /></button>}<button className="mobile-menu icon-button" aria-label="Open navigation"><Menu size={20} /></button></div>
     </header>
     {view === 'map' && <MapView buildings={filteredBuildings} selectedBuilding={selectedBuilding} chooseBuilding={chooseBuilding} floor={floor} setFloor={setFloor} selectedSeat={selectedSeat} setSelectedSeat={setSelectedSeat} query={query} setQuery={setQuery} openSeats={openSeats} buildingDetail={buildingDetail} />}
     {view === 'history' && <HistoryView building={selectedBuilding} points={history} />}
@@ -132,8 +140,133 @@ function App() {
 
 function MapView({ buildings, selectedBuilding, chooseBuilding, floor, setFloor, selectedSeat, setSelectedSeat, query, setQuery, openSeats, buildingDetail }) {
   return <main><section className="hero"><div className="hero-copy"><span className="eyebrow"><span className="live-dot" /> Austin campus · updated just now</span><h1>Start anywhere.<br /><em>Find your table.</em></h1><p>See what’s actually vacant, then find someone studying the same thing.<br />No wandering. No awkward cold starts.</p></div><div className="hero-note"><Sparkles size={17} /><span><strong>{openSeats} vacant seats</strong><br />across the campus right now</span></div></section>
-    <section className="campus-section"><div className="section-heading"><div><span className="eyebrow">Campus map <span className="muted-separator">/</span> UT Austin · Main campus</span><h2>Start anywhere on campus.</h2><p>Search a building to jump from the quad to its live classroom map.</p></div><div className="search-box"><Search size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search buildings, libraries..." /><kbd>⌘ K</kbd></div></div><div className="map-stage"><div className="map-grid" /><div className="map-water" /><div className="map-road road-a" /><div className="map-road road-b" /><div className="map-block block-a" /><div className="map-block block-b" /><div className="map-block block-c" /><div className="map-label label-gdc" onClick={() => chooseBuilding(buildings.find((b) => b.id === 'gdc') || selectedBuilding)}>GDC Study Hall</div><div className="map-label label-union" onClick={() => chooseBuilding(buildings.find((b) => b.id === 'union') || selectedBuilding)}>Texas Union</div><div className="map-label label-pcl" onClick={() => chooseBuilding(buildings.find((b) => b.id === 'pcl') || selectedBuilding)}>PCL Library</div><div className="map-label label-sac" onClick={() => chooseBuilding(buildings.find((b) => b.id === 'sac') || selectedBuilding)}>Student Activity Center</div><div className="map-center"><MapPin size={14} /> Select a building marker to zoom in</div><div className="map-controls"><button>+</button><button>−</button><button><Compass size={16} /></button></div><span className="map-attribution">Map view · campus occupancy</span></div><div className="map-legend"><span><i className="legend-live" /> Live building data</span><span><i className="legend-simulated" /> Simulated building</span><span className="map-scale">500 ft <b /></span></div></section>
-    <section className="workspace"><aside className="building-list"><div className="list-heading"><span className="eyebrow">Nearby buildings</span><span>Updated just now</span></div>{buildings.map((building) => <button className={`building-row ${selectedBuilding.id === building.id ? 'selected' : ''}`} key={building.id} onClick={() => chooseBuilding(building)}><span className={`building-icon ${building.color}`}>{building.short}</span><span className="building-meta"><strong>{building.name}</strong><small>{building.distance} · {building.floors} floors</small></span><span className="building-count"><strong>{building.open}</strong><small>vacant</small></span></button>)}</aside><SeatMap building={selectedBuilding} detail={buildingDetail} floor={floor} setFloor={setFloor} selectedSeat={selectedSeat} setSelectedSeat={setSelectedSeat} /></section></main>
+    <section className="campus-section"><div className="section-heading"><div><span className="eyebrow">Campus map <span className="muted-separator">/</span> UT Austin · Main campus</span><h2>Start anywhere on campus.</h2><p>Search a building to jump from the quad to its live classroom map.</p></div><div className="search-box"><Search size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search buildings, libraries..." /><kbd>⌘ K</kbd></div></div><CampusMap buildings={buildings} selectedBuilding={selectedBuilding} chooseBuilding={chooseBuilding} /></section>
+    <section className="workspace"><aside className="building-list"><div className="list-heading"><span className="eyebrow">Nearby buildings</span><span>Updated just now</span></div>{buildings.map((building) => <button className={`building-row ${selectedBuilding.id === building.id ? 'selected' : ''}`} key={building.id} onClick={() => chooseBuilding(building)}><span className={`building-icon ${building.color}`}>{building.short}</span><span className="building-meta"><strong>{building.name}</strong><small>{building.distance} · {building.floors} floors</small></span><span className="building-count"><strong>{building.open}</strong><small>open</small></span></button>)}</aside><SeatMap building={selectedBuilding} detail={buildingDetail} floor={floor} setFloor={setFloor} selectedSeat={selectedSeat} setSelectedSeat={setSelectedSeat} /></section></main>
+}
+
+const campusCoordinates = {
+  pcl: [-97.7343, 30.2837],
+  union: [-97.7417, 30.2848],
+  gdc: [-97.7274, 30.2847],
+  sac: [-97.7397, 30.2815],
+}
+
+const fallbackMapStyle = {
+  version: 8,
+  sources: {
+    basemap: {
+      type: 'raster',
+      tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}'],
+      tileSize: 256,
+      attribution: 'Tiles &copy; Esri',
+    },
+    campus: {
+      type: 'geojson',
+      data: {
+        type: 'FeatureCollection',
+        features: [
+          ['pcl', -97.7343, 30.2837, 4, 0.00045, 0.0003],
+          ['union', -97.7417, 30.2848, 3, 0.00035, 0.00024],
+          ['gdc', -97.7274, 30.2847, 2, 0.00032, 0.00022],
+          ['sac', -97.7397, 30.2815, 2, 0.0003, 0.00025],
+        ].map(([id, longitude, latitude, floors, width, height]) => ({
+          type: 'Feature',
+          properties: { id, height: floors * 5, base: 0 },
+          geometry: {
+            type: 'Polygon',
+            coordinates: [[
+              [longitude - width, latitude - height],
+              [longitude + width, latitude - height],
+              [longitude + width, latitude + height],
+              [longitude - width, latitude + height],
+              [longitude - width, latitude - height],
+            ]],
+          },
+        })),
+      },
+    },
+  },
+  layers: [
+    { id: 'background', type: 'background', paint: { 'background-color': '#e8e2dc' } },
+    { id: 'basemap', type: 'raster', source: 'basemap', paint: { 'raster-opacity': 0.9 } },
+    {
+      id: 'campus-buildings',
+      type: 'fill-extrusion',
+      source: 'campus',
+      paint: {
+        'fill-extrusion-color': '#bf5700',
+        'fill-extrusion-height': ['get', 'height'],
+        'fill-extrusion-base': ['get', 'base'],
+        'fill-extrusion-opacity': 0.88,
+      },
+    },
+  ],
+}
+
+function CampusMap({ buildings, selectedBuilding, chooseBuilding }) {
+  const containerRef = useRef(null)
+  const mapRef = useRef(null)
+  const markersRef = useRef([])
+
+  useEffect(() => {
+    if (!containerRef.current || mapRef.current) return undefined
+    const map = new maplibregl.Map({
+      container: containerRef.current,
+      style: import.meta.env.VITE_MAP_STYLE_URL || fallbackMapStyle,
+      center: [-97.735, 30.284],
+      zoom: 15.2,
+      pitch: 58,
+      bearing: -18,
+      attributionControl: false,
+    })
+    map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'top-right')
+    map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-right')
+    map.on('error', (event) => console.error('MapLibre map error', event.error))
+    map.on('load', () => {
+      if (map.getLayer('campus-buildings') || !map.getSource('openmaptiles')) return
+      map.addLayer({
+        id: '3d-buildings',
+        type: 'fill-extrusion',
+        source: 'openmaptiles',
+        'source-layer': 'building',
+        minzoom: 14,
+        paint: {
+          'fill-extrusion-color': '#c46a24',
+          'fill-extrusion-height': ['coalesce', ['get', 'render_height'], ['get', 'height'], 12],
+          'fill-extrusion-base': ['coalesce', ['get', 'render_min_height'], ['get', 'min_height'], 0],
+          'fill-extrusion-opacity': 0.82,
+        },
+      })
+    })
+    mapRef.current = map
+    return () => {
+      markersRef.current.forEach((marker) => marker.remove())
+      map.remove()
+      mapRef.current = null
+    }
+  }, [])
+
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map) return undefined
+    markersRef.current.forEach((marker) => marker.remove())
+    markersRef.current = buildings.flatMap((building) => {
+      const coordinates = campusCoordinates[building.id]
+      if (!coordinates) return []
+      const element = document.createElement('button')
+      element.type = 'button'
+      element.className = `map-marker${selectedBuilding?.id === building.id ? ' selected' : ''}`
+      element.textContent = building.name
+      element.addEventListener('click', () => {
+        chooseBuilding(building)
+        map.flyTo({ center: coordinates, zoom: 17.2, pitch: 65, duration: 900 })
+      })
+      return [new maplibregl.Marker({ element, anchor: 'bottom' }).setLngLat(coordinates).addTo(map)]
+    })
+    return undefined
+  }, [buildings, chooseBuilding, selectedBuilding?.id])
+
+  return <><div ref={containerRef} className="map-stage" /><div className="map-legend"><span><i className="legend-live" /> Live building data</span><span><i className="legend-simulated" /> OpenStreetMap 3D buildings</span><span className="map-scale">UT Austin · Main campus</span></div></>
 }
 
 function SeatMap({ building, detail, floor, setFloor, selectedSeat, setSelectedSeat }) {
@@ -141,10 +274,7 @@ function SeatMap({ building, detail, floor, setFloor, selectedSeat, setSelectedS
   const liveSeats = floorData?.tables?.flatMap((table) => table.seats.map((seat) => [seat.id, seat.state]))
   const seats = liveSeats?.length ? liveSeats : seedSeats
   const counts = seats.reduce((result, [, status]) => ({ ...result, [status]: (result[status] || 0) + 1 }), {})
-  const selectedSeatStatus = seats.find(([id]) => id === selectedSeat)?.[1]
-  const statusLabel = (s) => (s === 'open' ? 'Vacant' : s === 'occupied' ? 'Occupied' : (s === 'likely' || s === 'likely_opening') ? 'Likely Vacant' : s === 'away' ? 'Away' : s || 'Unknown')
-
-  return <div className="seat-panel"><div className="seat-heading"><div><span className="eyebrow">Seat map <span className="live-pill"><span /> Live</span></span><h2>{building.name}</h2><p>Floor {floor} <span>·</span> Occupancy from seat nodes</p></div><label className="floor-select">Floor {floor}<select value={floor} onChange={(event) => setFloor(Number(event.target.value))}>{(detail?.floors || Array.from({ length: building.floors }, (_, index) => ({ floor: index + 1 }))).map((item) => <option key={item.floor} value={item.floor}>Floor {item.floor}</option>)}</select><ChevronDown size={15} /></label></div><div className="seat-toolbar"><span><i className="seat-key open" />Vacant <strong>{counts.open || 0}</strong></span><span><i className="seat-key occupied" />Occupied <strong>{counts.occupied || 0}</strong></span><span><i className="seat-key likely" />Likely vacant <strong>{counts.likely_opening || counts.likely || 0}</strong></span><span className="toolbar-note">Click a seat for details</span></div><div className="seat-canvas"><div className="table-label label-one">Window bar</div><div className="table-label label-two">Group tables</div><div className="seat-grid">{seats.map(([id, status]) => <button key={id} className={`seat ${status} ${selectedSeat === id ? 'selected' : ''}`} onClick={() => setSelectedSeat(id)}><span>{id}</span>{status === 'open' && <i />}</button>)}</div><div className="seat-annotation"><Zap size={14} /> Seats pulse when a recommendation is ready</div></div>{selectedSeat && <div className="seat-detail"><div><span className={`seat-status ${selectedSeatStatus}`}>{statusLabel(selectedSeatStatus)}</span><strong>{selectedSeat === 'A4' ? 'Recommended for you' : `Seat ${selectedSeat}`}</strong><small>{selectedSeat === 'A4' ? 'Good light · quiet corner · likely vacant' : `Floor ${floor} · Group tables`}</small></div><button className="primary-button small" onClick={() => setSelectedSeat(null)}>Close <X size={14} /></button></div>}</div>
+  return <div className="seat-panel"><div className="seat-heading"><div><span className="eyebrow">Seat map <span className="live-pill"><span /> Live</span></span><h2>{building.name}</h2><p>Floor {floor} <span>·</span> Occupancy from seat nodes</p></div><label className="floor-select">Floor {floor}<select value={floor} onChange={(event) => setFloor(Number(event.target.value))}>{(detail?.floors || Array.from({ length: building.floors }, (_, index) => ({ floor: index + 1 }))).map((item) => <option key={item.floor} value={item.floor}>Floor {item.floor}</option>)}</select><ChevronDown size={15} /></label></div><div className="seat-toolbar"><span><i className="seat-key open" />Open <strong>{counts.open || 0}</strong></span><span><i className="seat-key occupied" />Occupied <strong>{counts.occupied || 0}</strong></span><span><i className="seat-key likely" />Likely open <strong>{counts.likely_opening || counts.likely || 0}</strong></span><span className="toolbar-note">Click a seat for details</span></div><div className="seat-canvas"><div className="table-label label-one">Window bar</div><div className="table-label label-two">Group tables</div><div className="seat-grid">{seats.map(([id, status]) => <button key={id} className={`seat ${status} ${selectedSeat === id ? 'selected' : ''}`} onClick={() => setSelectedSeat(id)}><span>{id}</span>{status === 'open' && <i />}</button>)}</div><div className="seat-annotation"><Zap size={14} /> Seats pulse when a recommendation is ready</div></div>{selectedSeat && <div className="seat-detail"><div><span className={`seat-status ${seats.find(([id]) => id === selectedSeat)?.[1]}`}>{selectedSeat}</span><strong>{selectedSeat === 'A4' ? 'Recommended for you' : 'Table seat'}</strong><small>{selectedSeat === 'A4' ? 'Good light · quiet corner · likely open' : `Floor ${floor} · Group tables`}</small></div><button className="primary-button small" onClick={() => setSelectedSeat(null)}>Close <X size={14} /></button></div>}</div>
 }
 
 function HistoryView({ building, points }) {
