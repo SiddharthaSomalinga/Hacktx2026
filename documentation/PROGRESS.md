@@ -4,10 +4,10 @@ Session log. Concrete changes, commands and observed results only.
 
 ## Current status
 
-- **Milestone:** backend B0–B5 and Muse built. Tiger Data is loaded and live. Remaining
-  steps wait on other roles or setup (PLAN: H0 hand-off, the D36 Vultr deploy, IC1–IC3).
+- **Milestone:** all branches integrated in `v1final` (D40) and verified locally. Remaining:
+  Q14 (demo-table sensors), frontend F3, and the D36 Vultr deploy.
 - **Tests:** 201 pass with Postgres (`make test-db`); 174 pass and 27 skip without it.
-- **Open questions:** Q2 (PLAN). U1, U2 and U3 resolved.
+- **Open questions:** Q14 (PLAN). Q2, U1, U2 and U3 resolved.
 
 ---
 
@@ -275,10 +275,77 @@ Caught before committing:
 - The full test suite on Postgres 18. It truncates every table, so it cannot run against the
   Tiger service.
 
+## 2026-10-25 — Session 5: integration into `v1final`
+
+### Found on GitHub
+- **`v1`** (`a145f6b`): the partner merged an older `v1backend` (`1b0d6f6`) into
+  `v1frontend` and wired the app to the API (`src/api.js`, a Vite `/api` proxy).
+- **`v1hardsoft`** (`16f573f`, hardware pair; then `32680ba`, the UT color theme, by the partner):
+  UI LED colors, a `DATABASE_URL=memory` mode in
+  `backend/app/wiring.py`, and `backend/scripts/arduino_bridge.py` with a node key in the code.
+- **`Arduino/Transmitter-Code`** (`384c530`): `HACKATHON.ino`, one IR sensor on D2, printing
+  `occupied: true|false` every 50 ms and driving its own LEDs. Also a Web Bluetooth component
+  saved as `.txt`, which posts `{table_id, occupied}` (not the readings contract).
+- **The frontend matches the contract** for all 17 calls (paths and bodies checked against the
+  OpenAPI schema). Its search never calls `/join`, so seekers do not send requests from the UI
+  yet (F3).
+
+### Trial merge, before any change
+- `v1backend` + `v1hardsoft` + `Arduino/Transmitter-Code` merged with no conflicts.
+- Tests passed, but `make check` failed: ruff (import order, a 105-character line) and mypy
+  `--strict` (`PostgresRepository` assigned to an `InMemoryRepository` variable).
+- **The merged image ran in Postgres mode.** Memory mode crashed in the container with
+  `ModuleNotFoundError: No module named 'tests'`.
+
+### Decisions
+- **D39:** no in-memory mode; the bridge moves to `bridge/` with env config; the Arduino files
+  move to `firmware/`.
+- **D40:** `v1final` is the final branch, then `main`.
+- **Q2 resolved.** **Q14 opened.**
+
+### Changes
+- `bridge/arduino_bridge.py`, `requirements.txt` and tests: env config (no key in code),
+  sketch-line parsing, a post on change plus every 2 s, LED logging, and reconnect on serial
+  errors.
+- **`v1final`:**
+  - created from `v1backend`, merging `v1hardsoft` and `Arduino/Transmitter-Code`;
+  - then `bcb312d`: `wiring.py` back to the `v1backend` version, the old script removed, and
+    the sketch moved to `firmware/HACKATHON/`.
+
+### Verification on `v1final`
+- **`make check`:** 174 passed, 27 skipped. **`make test-db`:** 201 passed. **Bridge:** 10
+  passed. **`npm ci && npm run build`:** passes, 250 kB JS.
+- **Bridge end to end:**
+  - A pseudo-terminal played the sketch's exact lines into the real bridge (pyserial), which
+    posted to a backend on the local database.
+  - The seat went `occupied` on `true` and `open` on `false`; the LED went red, then green.
+- **Image (`FRONTEND_DIR=.`) on one origin, replaying the frontend's API calls with two users:**
+  - `link` 200 → `topic` 200 → findable → `search` 200 → `join` 200.
+  - The inbox card carried no name (FR-43); then `accept` 200.
+  - The seeker's match view: `other_first_name` Alex, `assigned_seat_id` `t1-s2`, and a live
+    Muse icebreaker. `arrived` 200.
+- **Found while replaying (Q14b):** with only `t1-s1` reporting, the host is hidden as
+  `table_full`; it becomes findable only once `t1-s2` reports open. The backend behaves as
+  FR-24 requires; the real table needs a second sensed seat.
+
+### Pushed
+- **During the merge, `v1hardsoft` was renamed `v1final` on GitHub** (head `32680ba`). That
+  commit was already in the verified tree.
+- The local `v1final` contains `origin/v1final`, so the push was a fast-forward.
+- `32680ba` carries a `Co-authored-by: Copilot` trailer. It is a teammate's commit, already
+  public; history was not rewritten.
+
+### Not verified
+- The frontend in a browser against this backend (only its API calls were replayed).
+- The real Arduino on the bridge, and anything on Vultr.
+
 ## Next steps
-1. **Frontend integration (IC1).** The partner merges `origin/v1backend` into their branch and
-   points the Vite proxy at `make dev`.
-2. **H0:** the hardware pair's node and seat ids replace the placeholders in `sql/seed.sql`.
-3. **Deploy (D36, D37):** Vultr instances and load balancer, `.tech` DNS on Vultr. Set `DB_POOL_SIZE` against the database limit, `COOKIE_SECURE=true`,
-   `FRONTEND_DIST`. Run `make policies` on Tiger Data, then `make qr ORIGIN=…`.
-4. **Card images:** `muse-image-1.0` is on the same API and key (frontend F4.3).
+1. **Q14 (team):** a second sensed seat at the demo table, and a person sensor or a changed
+   demo. Without them the real table cannot host a match or show a ghost seat.
+2. **Frontend F3:** call `POST /api/search/:id/join` after a search.
+3. **Deploy (D36, D37):** the Vultr servers, load balancer and `.tech` DNS; `.env.prod`;
+   `make deploy REF=origin/v1final FRONTEND_DIR=.`.
+4. **Hardware pair:** run `bridge/arduino_bridge.py` with `GHOSTSEATS_URL` and `NODE_KEY` set.
+   The real key is given to them privately, never committed.
+5. **After the servers work:** fast-forward `main` to `v1final` (D40); print the QR codes for
+   the final domain.
