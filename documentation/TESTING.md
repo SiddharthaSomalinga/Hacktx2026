@@ -19,14 +19,17 @@ One device hosts, the other seeks. Both talk to one backend on the Mac.
    uv run uvicorn app.main:build --factory --host 0.0.0.0 --port 8000
    ```
    Allow incoming connections if macOS asks.
-5. **Sit someone down.** Hosting needs the seat sensor to see a person. Without the hardware,
+5. **Demo hosts (one device is enough).** Run `make seed-demo` once, and start the server with
+   `DEMO_HOSTS=true` in front of the command in step 4. Every catalog course then has a
+   simulated host who accepts a Join after about 5 seconds (D56).
+6. **Sit someone down.** Hosting needs the seat sensor to see a person. Without the hardware,
    run the stand-in node in another terminal (from `backend/`):
    `uv run python -m scripts.fake_node --seats t1-s1,t1-s2`, then type `1 p` (person on seat 1)
    and leave seat 2 empty, so the table has an open seat for the partner.
-6. **Open the app.**
+7. **Open the app.**
    - Mac: `http://localhost:8000`
    - Phone: `http://<the Mac's IP>:8000`. Find the IP with `ipconfig getifaddr en0`.
-7. **Pick roles.** Mac as Alex (host), phone as Priya (seeker), or the other way round.
+8. **Pick roles.** Mac as Alex (host), phone as Priya (seeker), or the other way round.
    Each device keeps its own login.
 
 **What plain http on the phone can't do.** Browsers only allow install, offline and push

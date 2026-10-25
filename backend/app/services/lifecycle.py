@@ -190,7 +190,8 @@ class LifecycleService:
                 for c in findable_hosts(
                     self._facts(tx, now), search.seeker_id, search.course_code, search.subject
                 )
-                if c.group is search.offered_group and not c.seat.is_simulated
+                if c.group is search.offered_group
+                and (self._ctx.demo_hosts or not c.seat.is_simulated)  # FR-31, D56
             ]
             # D43: Muse ranks with each side's major; names never reach the model.
             seeker_topic = topic_of(search, major_of(tx, search.seeker_id))
@@ -257,7 +258,9 @@ class LifecycleService:
             facts = self._facts(tx, now)
             seat = facts.seat(host.seat_id)
             assert seat is not None
-            step = advance_match(match, facts.seat_state(seat), now, self._t)
+            step = advance_match(
+                match, facts.seat_state(seat), now, self._t, host_simulated=seat.is_simulated
+            )
             if step is MatchStep.KEEP:
                 return
             if step is MatchStep.EXPIRE:

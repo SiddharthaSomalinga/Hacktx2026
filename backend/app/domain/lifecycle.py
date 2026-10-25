@@ -111,12 +111,19 @@ class MatchStep(StrEnum):
 
 
 def advance_match(
-    m: Match, host_seat_state: SeatState | None, now: datetime, t: Timers
+    m: Match,
+    host_seat_state: SeatState | None,
+    now: datetime,
+    t: Timers,
+    *,
+    host_simulated: bool = False,
 ) -> MatchStep:
     if m.status is not MatchStatus.ACTIVE:
         return MatchStep.KEEP
     if now >= m.expires_at:
         return MatchStep.EXPIRE
+    if host_simulated:
+        return MatchStep.KEEP  # a simulated seat has no sensor; its host never leaves (D56)
     if host_seat_state is None or absent_for(host_seat_state, now) >= t.host_leave_cancel:
         return MatchStep.CANCEL
     return MatchStep.KEEP

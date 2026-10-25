@@ -70,6 +70,9 @@ vapid-keys: ## Generate a VAPID key pair for .env
 load-check: ## 500 polling clients + 50 fake nodes against BASE_URL (creates load-test seats)
 	$(RUN) python -m scripts.load_check --setup --base-url "$${BASE_URL:-http://localhost:8000}" $(ARGS)
 
+seed-demo: ## One simulated host per catalog course, so every topic finds someone (D56)
+	$(RUN) python -m scripts.seed_demo_hosts
+
 cards: ## Generate the match card images with Muse Image into OUT (default out/cards) (D52)
 	$(RUN) python -m scripts.card_images --out "$(or $(OUT),out/cards)"
 

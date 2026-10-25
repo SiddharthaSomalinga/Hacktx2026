@@ -635,3 +635,11 @@ active controls and the floor-plan frame. FR-8 building colors and the FR-7 LEDs
 **D55 — The app is called Synapse.** The author's call. Every name a user sees in the v2 app
 (wordmark, page title, install name, messages, notifications) says Synapse. The project docs,
 repo, backend and API keep their existing names.
+
+**D56 — Demo hosts.** The author's call, so the demo works with one phone; FR-31 amended.
+- `make seed-demo` seats one simulated host per catalog course (24), so every topic in the
+  catalog finds someone.
+- With `DEMO_HOSTS=true`, simulated hosts count for Join and enter the cascade, and the
+  scheduler accepts each request `DEMO_ACCEPT_S` (5) after it arrives, through the normal
+  accept path (real match, seat, icebreaker). A simulated host's match ends only by expiry.
+- Off by default: without the setting, simulated hosts never receive requests (FR-31, D22).

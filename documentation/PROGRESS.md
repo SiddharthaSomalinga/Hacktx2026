@@ -518,6 +518,12 @@ Caught before committing:
   phone, Lighthouse/CDP installability. No Playwright suite is committed; the flows above ran
   from a scratch script.
 
+### Demo hosts (D56)
+- `make seed-demo`: 24 hosts added, 0 on a second run. With `DEMO_HOSTS=true`: "physics
+  mechanics", "psych 301", "stats" each found a joinable host; "macro econ" → join → matched
+  with Skyler (Economics) within 9 s. New test: accepts only after the delay; the match
+  survives 600 s with no sensor. `make check` passes.
+
 ## Next steps
 1. **Tiger migration (before any deploy of `v1final`):** on a hotspot, from `backend/`, run
    `make db-init seed`. This adds `users.major` and seeds the majors (D43).

@@ -22,6 +22,7 @@ Decision numbers refer to `PLAN.md`, decision log.
 - **Found during the build (v1.1, same release):** `label`, `searches.joined_at`, `host_sessions.confirm_notified_at` (§6); `table_not_found`, `seat_taken`, `database_unavailable` (§7); `PUSH_MAX_ATTEMPTS`, `FRONTEND_DIST`, `COOKIE_SECURE`, `WORKER_ENABLED`, `DB_POOL_SIZE` (§8); Q12 values 24 h / 30 days.
 - **D42, D43** Requests wait 5 minutes; first name and major are visible before accept on both sides and in the request push; Muse ranks and writes icebreakers with majors.
 - **§8 (D38, D41)** `MUSE_BASE_URL`, `MUSE_MODEL`, `DB_TIMEOUT_S`.
+- **FR-31 (D56)** Demo mode lets simulated hosts take and accept requests; off by default.
 - **§7 (D53)** `GET /api/seats/:id`; block and report by request or match id; ids on the match and search status.
 - **§6** Adds `buildings.lat/lng`, `keywords`, `offered_group`, change-only `seat_readings` with offline markers, `push_subscriptions` and `notification_outbox`. **§7** New and changed endpoints, node key, error codes. **§8** New keys and an environment table.
 
@@ -113,7 +114,7 @@ occupancy history and push notifications.
 
 - **FR-29** A search shall return findable hosts in two groups, same course and related (same subject), aggregated by building and floor with counts. No names. Simulated hosts are included in the counts. The search shall record its offered group: same course if that group has any hosts, otherwise related. The client shall hide Join when the offered group has no real (non-simulated) host.
 - **FR-30** Within each group, hosts shall be ranked by the AI relatability score, falling back to keyword overlap.
-- **FR-31** "Join" shall send a request to the top-ranked real host in the offered group only. Simulated hosts never receive requests.
+- **FR-31** "Join" shall send a request to the top-ranked real host in the offered group only. Simulated hosts never receive requests. *(Demo mode, D56: with `DEMO_HOSTS` on, simulated hosts receive requests and accept them after `DEMO_ACCEPT_S`.)*
 - **FR-32** A request shall expire after `REQUEST_TIMEOUT_S`. On decline, expiry or skip, the next host shall receive it. The next host is the top-ranked real host in the offered group, recomputed at that moment, excluding hosts already tried.
 - **FR-33** After `MAX_HOSTS_PER_SEARCH` hosts, or when no untried real host remains in the offered group, the search shall end as exhausted. The seeker shall see "No one's free right now" with seat recommendations. The cascade never moves to the other group.
 - **FR-34** A seeker shall have at most one active search and at most `MAX_REQUESTS_PER_HOUR` requests per hour.
