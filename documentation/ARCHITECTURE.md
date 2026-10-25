@@ -294,19 +294,30 @@ class TopicAI(Protocol):                     # services/ports.py
 - `simulated_state` hashes `f"{seat_id}:{slot}"` (sha256 → uniform [0, 1)), with `slot = floor(epoch_s / SIM_SLOT_S)`, and maps the result to a state through thresholds set by the building's `busyness`. The result is deterministic per slot, so every client and every instance agrees.
 - Seeded simulated host sessions count in search aggregates and are always findable. They never receive requests, because the cascade filters `is_simulated`.
 
-## 10. History — Tiger Data (FR-49, D31)
+## 10. History — Tiger Data (FR-49, D31, D33)
 
-- **Storage.** `seat_readings` is a Timescale hypertable on `time`, change-only, with offline markers (REQUIREMENTS §6). Per seat, the state at time *t* is the latest row at or before *t*: `open`, `not_open` or `offline`.
-- **Query.** Per seat and hour, `state_agg(time, state)` from Timescale Toolkit. A bucket with no rows inherits the previous bucket's last state through `interpolated_duration_in(…, prev => LAG(agg))`. `open_avg` for an hour is the sum over seats of seconds `open`, divided by 3600.
-- **Continuous aggregate.** An hourly per-seat `compact_state_agg` materializes the hourly results. The endpoint reads it over `HISTORY_WINDOW_H`.
-- **Policies.** `add_compression_policy` on raw chunks and `add_retention_policy` (`READINGS_RETENTION_DAYS`) on raw rows; the hourly aggregate is retained.
-- **U2 probe in B0.** It confirms `timescaledb_toolkit` is available and that the toolkit aggregate works inside a continuous aggregate. If either fails, the same result is computed from raw rows with a `LEAD()` window clipped to bucket bounds; change-only storage keeps that small.
-- `scripts/seed_history.py` writes change-only rows for every seat, including simulated buildings, over `HISTORY_WINDOW_H`.
+- **Storage.** `seat_readings` is a Timescale hypertable on `time`, change-only, with offline markers (REQUIREMENTS §6). A seat's state at time *t* is its latest row at or before *t*.
+- **One query, two callers.** The SQL function `open_hourly(building, since, until, offline)` in `sql/schema.sql` computes hourly average open seats. The API (`GET /api/buildings/:id/history`, last `HISTORY_WINDOW_H`) and the rollup job both call it, so they cannot disagree. Its steps:
+  1. Take each seat's row in force at `since`, plus every change inside the window.
+  2. Compute `lead()` over **all** rows, so an open interval ends at the change that ended it.
+  3. Keep the open intervals; clip them to the window and to `last_seen + OFFLINE_S`, because a silent seat's state is unknown after that.
+  4. Sum open seconds per hour. `LEAST`/`GREATEST` skip NULLs in Postgres, so hours with no interval are filtered out explicitly rather than counted as fully open.
+- **Rollup and retention (Q12).**
+  - A Timescale job (`add_job`, hourly) calls `rollup_open_hourly`, which stores completed hours in `building_open_hourly` and is idempotent.
+  - `add_compression_policy` compresses raw chunks older than a day.
+  - `add_retention_policy` drops raw rows after `READINGS_RETENTION_DAYS` (30); the hourly table is kept.
+  - `make policies` applies all three, idempotently.
+- **Why not Toolkit `state_agg` (D33).**
+  - The U2 probe ran locally on TimescaleDB 2.31 with Toolkit 1.26: both install, and `state_agg` works inside a continuous aggregate.
+  - But a `state_agg` only measures between its own rows. With change-only storage, a seat that stays open for hours has no rows in those hours, so per-hour aggregates score them as zero. In the probe, `duration_in` returned 30 min of "open" where the window held 75.
+  - Fixing that needs gap-filling across buckets. The window function is exact and needs no extension, so Tiger Data only has to provide TimescaleDB itself.
+- **Seeding.** `scripts/seed_history.py` writes change-only rows for seats with no readings in the window. It never deletes, so it is safe on a live database.
+- **Verification.** The repository conformance suite runs the same scenarios against the in-memory reference and against Postgres (including carry-in from before the window, silent-seat capping and the partial current hour). That suite caught two SQL bugs the in-memory tests could not (PROGRESS, Session 3).
 
 ## 11. Deployment topology (D5, D32)
 
 ```
- phones / PWA ──HTTPS──► load balancer ──► FastAPI × N (API + frontend/dist + worker task each)
+ phones / PWA ──HTTPS──► load balancer ──► FastAPI × N (API + frontend/dist + worker thread each)
  Pi bridge ──HTTPS + X-Node-Key──┘                 │ primary: writes, locks      │ read URL: map, history, recommend
                                                    ▼                             ▼
                                              Tiger Data primary ───────► read replica (optional)
@@ -315,6 +326,8 @@ class TopicAI(Protocol):                     # services/ports.py
 
 - **One origin.** The session cookie stays SameSite=Lax with no CORS, and the service worker scope covers the app.
 - **N instances** are safe because no state of record lives in memory (NFR-8). The scheduler uses `SKIP LOCKED` (§14), and caches are derived (§5).
+- **Connection budget (D34).** Every process opens a primary pool of `DB_POOL_SIZE` (default 5), plus a replica pool when `DATABASE_READ_URL` is set. Processes × instances × pools × `DB_POOL_SIZE` must stay below the database's `max_connections`. The local Timescale image allows 25, and 4 workers × 5 peaked at exactly 20 under load.
+- **Outages (D35).** Connection failures become `Unavailable` in the repository and a 503 `database_unavailable` with `Retry-After: 5` at the API, after at most the 5 s pool wait. `/api/health` reports `db: false`.
 - **Host choice is U3.** Criteria: always-on, HTTPS, environment variables, at least two instances. Fallback: a laptop behind a `cloudflared` tunnel.
 - **Network.** The Pi and the phones use the public URL. A phone hotspot is the backup network.
 
@@ -360,7 +373,7 @@ All `fetch` calls go through one `src/api.js`. It sends cookies, turns
 
 ```
 transition (any trigger) ──same tx──► INSERT notification_outbox(user_id, kind, payload)
-worker loop (each instance):
+worker thread (each instance, `app/worker.py`):
    every SCHEDULER_TICK_S:
       SELECT … WHERE <deadline passed> FOR UPDATE SKIP LOCKED   → advance_* (requests, matches, sessions)
    outbox sender:
@@ -385,4 +398,4 @@ worker loop (each instance):
 | Sensor write volume | Change-only `seat_readings`; compression and retention policies; hourly continuous aggregate |
 | Many app instances | No state of record in memory; `SKIP LOCKED` worker; signed cookies |
 | Lock contention | Row locks per seat, search or match only; AI calls never inside a lock |
-| Verification | `scripts/load_check.py`: 500 polling clients plus 50 fake nodes; p50/p95 and DB load recorded in PROGRESS |
+| Verification | `scripts/load_check.py`: 500 polling clients plus 50 fake nodes; results and hardware in PROGRESS (Session 3) |

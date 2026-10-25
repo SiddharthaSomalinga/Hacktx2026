@@ -47,7 +47,7 @@ Tracks: Best Hardware · Meta (Bringing People Closer Together with AI) · MLH B
 
 ## Current milestone
 
-Documentation v1.1 is complete. Next: **B0**, **F0** and **H0** in parallel.
+Backend B0–B5 built and verified locally on Postgres + TimescaleDB (PROGRESS, Session 3). Open backend steps wait on other roles or unknowns: hardware handoff (H0), deploy (U3), Muse (U1), and the integration checkpoints IC1–IC3 with the frontend.
 
 ## Backend checklist — Manideep (`v1backend`)
 
@@ -55,77 +55,77 @@ Each numbered step is a major feature: commit before it, add tests with it,
 commit when green.
 
 ### B0 — Skeleton and contract
-1. ⬜ `backend/pyproject.toml` (Python 3.12, uv): fastapi, uvicorn[standard], pydantic-settings, psycopg[binary,pool], httpx, itsdangerous, pywebpush; dev: pytest, ruff, mypy. Commit `uv.lock`.
-2. ⬜ `backend/.gitignore` (`.venv`, `__pycache__`, `.env`) before the first backend commit; `.env.example` lists every environment key (REQUIREMENTS §8) with no values.
-3. ⬜ Makefile targets: `dev test lint fmt typecheck check db-init seed seed-history fake-node load-check`.
-4. ⬜ `config.py` validates every §8 key at startup; missing required environment → the process refuses to start.
-5. ⬜ `GET /api/health → {ok, db}`; an import-guard test that `domain/` imports no I/O, config or clock.
-6. ⬜ **Contract first:** every request/response model in `interface/schemas.py`, every route registered and returning 501. From here `/docs` is the live contract for the frontend.
-7. ⬜ Tiger Data service; `sql/schema.sql` (REQUIREMENTS §6, `CHECK` on every status, the hypertable, the partial unique indexes in ARCH §6); `sql/seed.sql` (buildings, tables, seats and node id agreed in H0, demo users).
-8. ⬜ U2 probe: `CREATE EXTENSION timescaledb_toolkit`, a `state_agg` query and a test continuous aggregate. Record the result in PROGRESS and pick the ARCH §10 path.
+1. ✅ `backend/pyproject.toml` (Python 3.12, uv): fastapi, uvicorn[standard], pydantic-settings, psycopg[binary,pool], httpx, itsdangerous, pywebpush; dev: pytest, ruff, mypy. Commit `uv.lock`.
+2. ✅ `backend/.gitignore` (`.venv`, `__pycache__`, `.env`) before the first backend commit; `.env.example` lists every environment key (REQUIREMENTS §8) with no values.
+3. ✅ Makefile targets: `dev test lint fmt typecheck check db-init seed seed-history fake-node load-check`.
+4. ✅ `config.py` validates every §8 key at startup; missing required environment → the process refuses to start.
+5. ✅ `GET /api/health → {ok, db}`; an import-guard test that `domain/` imports no I/O, config or clock.
+6. ✅ **Contract first:** every request/response model in `interface/schemas.py`, every route registered and returning 501. From here `/docs` is the live contract for the frontend.
+7. ✅ Local Timescale (Tiger Data service still to create, U3); `sql/schema.sql` (REQUIREMENTS §6, `CHECK` on every status, the hypertable, the partial unique indexes in ARCH §6); `sql/seed.sql` (buildings, tables, seats and node id agreed in H0, demo users).
+8. ✅ U2 probe: `CREATE EXTENSION timescaledb_toolkit`, a `state_agg` query and a test continuous aggregate. Record the result in PROGRESS and pick the ARCH §10 path.
 
 ### B1 — Seat slice (Hardware track)
-1. ⬜ `domain/types.py`, `domain/seat_engine.py`. Tests at exact boundaries: `DEBOUNCE_S`, `GHOST_S`, `OFFLINE_S`, `HUMAN_FRESH_S`; blink overrides color; `away → occupied` resets `away_since`; offline wins.
-2. ⬜ `Repository` port, `InMemoryRepository`, `PostgresRepository` seat methods, and the `tests/repo_contract/` conformance suite.
-3. ⬜ `POST /api/readings` (ARCH §4):
+1. ✅ `domain/types.py`, `domain/seat_engine.py`. Tests at exact boundaries: `DEBOUNCE_S`, `GHOST_S`, `OFFLINE_S`, `HUMAN_FRESH_S`; blink overrides color; `away → occupied` resets `away_since`; offline wins.
+2. ✅ `Repository` port, `InMemoryRepository`, `PostgresRepository` seat methods, and the `tests/repo_contract/` conformance suite.
+3. ✅ `POST /api/readings` (ARCH §4):
    - `X-Node-Key` check; unknown seats skipped and logged.
    - Change-only insert plus offline markers; row lock per seat.
    - Tests: 10 identical readings → 1 row; a gap → marker plus row.
-4. ⬜ `scripts/fake_node.py`: interactive per-seat toggles, the same payload as the bridge.
-5. ⬜ `GET /api/buildings`, `GET /api/buildings/:id` from the snapshot cache with `ETag`/304 (ARCH §5). Tests: a second request within `MAP_CACHE_S` doesn't hit the repository; `If-None-Match` → 304.
-6. ⬜ Hand the hardware pair the URL, `NODE_KEY`, seat ids and LED mapping.
+4. ✅ `scripts/fake_node.py`: interactive per-seat toggles, the same payload as the bridge.
+5. ✅ `GET /api/buildings`, `GET /api/buildings/:id` from the snapshot cache with `ETag`/304 (ARCH §5). Tests: a second request within `MAP_CACHE_S` doesn't hit the repository; `If-None-Match` → 304.
+6. ⬜ Hand the hardware pair the URL, `NODE_KEY`, seat ids and LED mapping. *(Waits on H0 seat ids and a deployed URL.)*
 7. ⬜ **IC1.**
 
 ### B2 — Map extras (Tiger Data track)
-1. ⬜ `domain/simulation.py` (deterministic per slot; busier → fewer open), wired into the snapshots (FR-13, 47).
-2. ⬜ `domain/geometry.py`, `domain/recommend.py` widening (D21), `GET /api/recommend`. Tests for each level, likely-only levels, full → nearest building.
-3. ⬜ History (ARCH §10, needs Q12):
+1. ✅ `domain/simulation.py` (deterministic per slot; busier → fewer open), wired into the snapshots (FR-13, 47).
+2. ✅ `domain/geometry.py`, `domain/recommend.py` widening (D21), `GET /api/recommend`. Tests for each level, likely-only levels, full → nearest building.
+3. ✅ History (ARCH §10, needs Q12):
    - `state_agg` path, continuous aggregate, compression and retention policies.
    - `scripts/seed_history.py`; `GET /api/buildings/:id/history`.
    - Test: a hand-built change log → exact `open_avg` per hour.
-4. ⬜ Deploy (U3): one origin serving `frontend/dist`, two instances, and the Pi pointed at it.
-5. ⬜ `scripts/seat_qr.py`: a printable sheet of `<origin>/seat/<seat_id>` QR codes for the hardware pair.
+4. ⬜ *(Blocked on U3.)* Deploy (U3): one origin serving `frontend/dist`, two instances, and the Pi pointed at it.
+5. ✅ `scripts/seat_qr.py`: a printable sheet of `<origin>/seat/<seat_id>` QR codes for the hardware pair.
 
 ### B3 — Accounts, topics, host, search (Meta track)
-1. ⬜ Auth: demo users, login, logout, `/api/me` with `host.status` / `hidden_reason`.
-2. ⬜ `domain/catalog.py`, `domain/topic_rules.py`, `FallbackAI`, `topic_cache`. Tests: `"ch 320m stereochem mechanisms"` and `"orgo 1 exam prep"` → CH 320M; `"314 trees hw"` → C S 314.
-3. ⬜ Host machine (ARCH §6; D17, D18, D20, D23, D24):
+1. ✅ Auth: demo users, login, logout, `/api/me` with `host.status` / `hidden_reason`.
+2. ✅ `domain/catalog.py`, `domain/topic_rules.py`, `FallbackAI`, `topic_cache`. Tests: `"ch 320m stereochem mechanisms"` and `"orgo 1 exam prep"` → CH 320M; `"314 trees hw"` → C S 314.
+3. ✅ Host machine (ARCH §6; D17, D18, D20, D23, D24):
    - Endpoints: link, topic, toggle, mute/unmute, confirm.
    - Tests: each `hidden_reason` triggered alone; each end reason; FR-50 errors.
-4. ⬜ Search machine (ARCH §6; D15, D19, D22):
+4. ✅ Search machine (ARCH §6; D15, D19, D22):
    - Endpoints: create with `offered_group` and `has_real_hosts`; join (`no_real_hosts`, FR-34); status; cancel.
    - Tests: expire, skip on absence, decline, simulated hosts never chosen, blocked hosts never chosen, exhaust at `MAX_HOSTS_PER_SEARCH`, never crosses groups.
    - A Postgres test with two concurrent advances → exactly one pending request.
-5. ⬜ Inbox; `decline {mute}` (D20).
+5. ✅ Inbox; `decline {mute}` (D20).
 6. ⬜ **IC2.**
 
 ### B4 — Match payoff (Meta + Hardware tracks)
-1. ⬜ Accept → match: AI icebreaker outside the transaction, seat assignment (FR-37, Q13), `card_key`, blink.
-2. ⬜ `GET /api/matches/:id` for both roles with `alt_seat_id` (D25); arrived; cancel; `advance_match` (2-min absence, 20-min expiry).
-3. ⬜ Block and report.
-4. ⬜ Seeded simulated host sessions (FR-48), verified never to receive requests.
-5. ⬜ *(Optional, FR-54)* search pinned to `related`.
+1. ✅ Accept → match: AI icebreaker outside the transaction, seat assignment (FR-37, Q13), `card_key`, blink.
+2. ✅ `GET /api/matches/:id` for both roles with `alt_seat_id` (D25); arrived; cancel; `advance_match` (2-min absence, 20-min expiry).
+3. ✅ Block and report.
+4. ✅ Seeded simulated host sessions (FR-48), verified never to receive requests.
+5. ✅ *(Optional, FR-54)* search pinned to `related`.
 6. ⬜ **IC3.**
-7. ⬜ `MuseAI` once U1 is resolved, then the Muse-off test: with a bad key the same flows complete on fallbacks.
+7. ⬜ *(Blocked on U1.)* `MuseAI` once U1 is resolved, then the Muse-off test: with a bad key the same flows complete on fallbacks.
 
 ### B4.5 — Push, scheduler, outbox (ARCH §14; D28–D30)
-1. ⬜ Tables `push_subscriptions`, `notification_outbox`; `Notifier` port, `push_webpush` adapter, `FakeNotifier`.
-2. ⬜ `GET /api/push/vapid-public-key`, `POST` / `DELETE /api/push/subscribe`.
-3. ⬜ `domain/notifications.py`: one outbox row per FR-52 event, payloads per FR-53.
-4. ⬜ Ingest-triggered advance of seat-linked sessions and matches.
-5. ⬜ `app/worker.py`: scheduler tick and outbox sender with `SKIP LOCKED`.
-6. ⬜ Tests:
+1. ✅ Tables `push_subscriptions`, `notification_outbox`; `Notifier` port, `push_webpush` adapter, `FakeNotifier`.
+2. ✅ `GET /api/push/vapid-public-key`, `POST` / `DELETE /api/push/subscribe`.
+3. ✅ `domain/notifications.py`: one outbox row per FR-52 event, payloads per FR-53.
+4. ✅ Ingest-triggered advance of seat-linked sessions and matches.
+5. ✅ `app/worker.py`: scheduler tick and outbox sender with `SKIP LOCKED`.
+6. ✅ Tests:
    - A request expires with no client polling → the next host gets a request and an outbox row.
    - Two concurrent ticks → one transition.
    - A failing push leaves the transition committed.
    - A 410 response deletes the subscription.
 
 ### B5 — Failure pass and hardening
-1. ⬜ On every endpoint: empty · one · many · absurdly large · hostile input · database down · Muse slow or down · push service down · same request twice · failure mid-transaction.
-2. ⬜ Boundary logging without secrets (ARCH §7).
-3. ⬜ Read/write split via `DATABASE_READ_URL`. Test: locked and write paths never use the read pool.
-4. ⬜ `scripts/load_check.py`: 500 polling clients plus 50 fake nodes; p50/p95 latency and DB load recorded in PROGRESS with the machine named.
-5. ⬜ Security pass and pre-commit checklist; merge into `v1`; deploy on two instances.
+1. ✅ On every endpoint: empty · one · many · absurdly large · hostile input · database down · Muse slow or down · push service down · same request twice · failure mid-transaction.
+2. ✅ Boundary logging without secrets (ARCH §7).
+3. ✅ Read/write split via `DATABASE_READ_URL`. Test: locked and write paths never use the read pool.
+4. ✅ `scripts/load_check.py`: 500 polling clients plus 50 fake nodes; p50/p95 latency and DB load recorded in PROGRESS with the machine named.
+5. 🚧 Security pass and pre-commit checklist ✅; two instances verified locally (4 workers) ✅; merge into `v1` and deploy ⬜ (U3, IC1).
 
 ### B6 — Ship
 1. ⬜ Demo environment: `GHOST_S=15`.
@@ -262,10 +262,10 @@ REQUIREMENTS §11, plus WebSockets (FR-10 specifies polling).
 | Q9 | What the host sees when the seeker's seat changes | Team | B4.2 | Resolved: D25 |
 | Q10 | Host and seeker at the same time | Team | B3.3, B3.4 | Resolved: D23 |
 | Q11 | FR-27 confirmation endpoint and grace | Team | B3.3 | Resolved: D24 |
-| Q12 | History chart window (`HISTORY_WINDOW_H`) and raw retention (`READINGS_RETENTION_DAYS`) | Team | B2.3 | **Open** |
-| Q13 | On accept, the host's table has no open seat at that instant: assign the nearest open seat on the floor (FR-39 rule), or reject the accept? | Team | B4.1 | **Open** |
+| Q12 | History chart window and raw retention | Team | B2.3 | Resolved: 24 h, 30 days (hourly rollup kept) |
+| Q13 | On accept, the host's table has no open seat at that instant | Team | B4.1 | Resolved: nearest open seat on the floor; none → no assigned seat |
 | U1 | Muse Spark and Muse Image access (key, endpoint, auth, JSON mode) | Backend, from Meta sponsors | B4.7, F4.3 | **Open** |
-| U2 | Tiger Data: toolkit, continuous-aggregate support, connection limits | Backend | B0.8 | **Open** |
+| U2 | Tiger Data: connection limit (sets `DB_POOL_SIZE`) | Backend | Deploy | **Open** — locally TimescaleDB 2.31 works; Toolkit no longer needed (D33) |
 | U3 | Deploy host (always-on, HTTPS, env vars, ≥ 2 instances) | Backend | B2.4 | **Open** |
 
 ## Risks
@@ -441,3 +441,20 @@ reading; change-only. Decision: change-only.
 - A read/write connection split.
 - No state of record in process memory (NFR-8).
 - Verified by a load check (B5.4).
+
+**D33 — History is a window-function SQL function plus an hourly rollup job; Toolkit is not used
+(2026-10-24).**
+- The U2 probe showed `state_agg` works locally, including in a continuous aggregate, but it only measures between its own rows.
+- Change-only storage leaves hours with no rows, so per-hour aggregates would score long stable periods as zero (the probe returned 30 of 75 open minutes).
+- `open_hourly()` rebuilds intervals with `lead()` and is exact. A Timescale job stores completed hours in `building_open_hourly`, so the hourly series outlives the 30-day raw retention (Q12).
+- The API and the job call the same function. Tiger Data only needs TimescaleDB.
+
+**D34 — Connection budget.** `DB_POOL_SIZE` (default 5) per pool per process. The local Timescale
+image allows 25 connections; a hard-coded pool of 10 overran it with 4 workers ("too many
+clients"). Processes × instances × pools × `DB_POOL_SIZE` < `max_connections`, checked against
+the real limit before deploying (U2).
+
+**D35 — Database outages are a 503.** The repository turns connection-level failures into the
+port's `Unavailable`. The API answers 503 `database_unavailable` with `Retry-After: 5`, after at
+most a 5 s pool wait, instead of a 500 after 10 s. The frontend shows an offline state and keeps
+polling.
