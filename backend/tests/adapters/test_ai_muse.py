@@ -6,7 +6,7 @@ import json
 import threading
 import time
 from collections.abc import Callable, Iterator
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 
@@ -261,3 +261,27 @@ def test_guarded_muse_failure_gives_the_fallback_answer() -> None:
 def test_wiring_picks_muse_only_with_a_key() -> None:
     assert isinstance(build_ai(make_settings()), FallbackAI)
     assert isinstance(build_ai(make_settings(muse_api_key="k")), MuseAI)
+
+
+def test_majors_reach_muse_and_names_never_do() -> None:
+    """D43: ranking and icebreakers see each side's major; first names are never sent."""
+    seen: list[httpx.Request] = []
+    seeker = replace(ORGO, major="Chemistry")
+    hosts = [Host("a", replace(ORGO, major="Biochemistry"), "Priya here, love orgo")]
+    ai = muse(lambda r: reply({"scores": [{"host": "h1", "score": 90}]}), seen)
+    ai.rank_hosts(seeker, hosts)
+    sent = user_payload(seen[0])
+    assert sent["seeker"]["major"] == "Chemistry"
+    assert sent["hosts"][0]["major"] == "Biochemistry"
+    for key in ("first_name", "name"):
+        assert key not in json.dumps(sent)
+    ai = muse(lambda r: reply({"icebreaker": "Chem meets biochem: which mechanism?"}), seen)
+    ai.icebreaker(seeker, replace(TREES, major="Computer Science"))
+    sent = user_payload(seen[1])
+    assert (sent["a"]["major"], sent["b"]["major"]) == ("Chemistry", "Computer Science")
+
+
+def test_no_major_sends_no_major_key() -> None:
+    seen: list[httpx.Request] = []
+    muse(lambda r: reply({"icebreaker": "Hi"}), seen).icebreaker(ORGO, TREES)
+    assert "major" not in user_payload(seen[0])["a"]

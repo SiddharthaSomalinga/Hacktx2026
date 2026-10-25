@@ -47,18 +47,18 @@ FROM tables t CROSS JOIN generate_series(1, 6) AS p
 WHERE t.id <> 'pcl-2-t1'
 ON CONFLICT (id) DO NOTHING;
 
-INSERT INTO users (id, first_name, is_demo) VALUES
-  ('u-alex',   'Alex',   true),
-  ('u-priya',  'Priya',  true),
-  ('u-jordan', 'Jordan', true),
-  ('u-mateo',  'Mateo',  true),
-  ('u-sam',    'Sam',    true),
-  ('u-wei',    'Wei',    true),
-  ('sim-taylor', 'Taylor', false),
-  ('sim-riley',  'Riley',  false),
-  ('sim-avery',  'Avery',  false),
-  ('sim-morgan', 'Morgan', false)
-ON CONFLICT (id) DO NOTHING;
+INSERT INTO users (id, first_name, major, is_demo) VALUES
+  ('u-alex',   'Alex',   'Biochemistry',     true),
+  ('u-priya',  'Priya',  'Chemistry',        true),
+  ('u-jordan', 'Jordan', 'Computer Science', true),
+  ('u-mateo',  'Mateo',  'Neuroscience',     true),
+  ('u-sam',    'Sam',    'Mathematics',      true),
+  ('u-wei',    'Wei',    'Economics',        true),
+  ('sim-taylor', 'Taylor', 'Chemistry',        false),
+  ('sim-riley',  'Riley',  'Computer Science', false),
+  ('sim-avery',  'Avery',  'Mathematics',      false),
+  ('sim-morgan', 'Morgan', 'Biology',          false)
+ON CONFLICT (id) DO UPDATE SET major = EXCLUDED.major;  -- D43: re-seeding adds majors
 
 -- Seeded simulated hosts (FR-48): always findable, never sent requests (FR-31, D22).
 INSERT INTO host_sessions (id, user_id, seat_id, topic_raw, course_code, subject, keywords, label,

@@ -85,6 +85,9 @@ CREATE TABLE IF NOT EXISTS users (
   first_name  text NOT NULL,
   is_demo     boolean NOT NULL DEFAULT true
 );
+-- D43: shown with the first name before accept, and given to Muse. Added to existing databases.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS major text
+  CHECK (major IS NULL OR length(major) BETWEEN 1 AND 60);
 
 CREATE TABLE IF NOT EXISTS topic_cache (
   text_key     text PRIMARY KEY,

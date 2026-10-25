@@ -217,6 +217,7 @@ class User:
     id: str
     first_name: str
     is_demo: bool
+    major: str | None = None  # shown before accept and given to Muse (D43)
 
 
 @dataclass(frozen=True)
@@ -225,6 +226,7 @@ class Topic:
     subject: str
     keywords: tuple[str, ...]
     label: str
+    major: str | None = None  # the person's major, attached only for the AI calls (D43)
 
 
 @dataclass(frozen=True)
