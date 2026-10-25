@@ -59,8 +59,11 @@ hours AS (
 )
 SELECT
   hours.hour_at AS hour,
+  -- FILTER: Postgres LEAST/GREATEST skip NULLs, so an hour with no interval (NULLs from the
+  -- LEFT JOIN) would otherwise count as fully open.
   coalesce(sum(extract(epoch FROM least(iv.stop_at, hours.hour_end)
-                                  - greatest(iv.start_at, hours.hour_at))), 0)
+                                  - greatest(iv.start_at, hours.hour_at)))
+             FILTER (WHERE iv.start_at IS NOT NULL), 0)
     / extract(epoch FROM hours.hour_end - hours.hour_at) AS open_avg
 FROM hours
 LEFT JOIN intervals iv
