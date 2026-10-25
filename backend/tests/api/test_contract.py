@@ -9,6 +9,7 @@ REQUIRED = {
     ("POST", "/api/readings"),
     ("GET", "/api/buildings"),
     ("GET", "/api/buildings/{building_id}"),
+    ("GET", "/api/seats/{seat_id}"),
     ("GET", "/api/recommend"),
     ("GET", "/api/buildings/{building_id}/history"),
     ("GET", "/api/demo-users"),

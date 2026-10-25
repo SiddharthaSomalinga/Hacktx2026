@@ -1,0 +1,151 @@
+.root {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: var(--paper);
+}
+
+.map {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity var(--d-slow) var(--ease-out);
+}
+
+.mapReady {
+  opacity: 1;
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.footprint {
+  fill: transparent;
+  stroke: var(--ink-3);
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+  transition:
+    fill var(--d-slow) var(--ease-out),
+    stroke var(--d-slow) var(--ease-out);
+}
+
+.known {
+  fill: color-mix(in srgb, var(--share) 22%, transparent);
+  stroke: var(--share);
+  stroke-width: 2;
+}
+
+.animate .footprint {
+  stroke-dasharray: 1;
+  animation: trace var(--d-draw) var(--ease-out) both;
+}
+
+@keyframes trace {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.marker {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-height: var(--hit);
+  padding: 0 var(--s-3) 0 var(--s-2);
+  transform: translate(-50%, calc(-100% - 10px - var(--lift, 0px)));
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-full);
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--shadow-2);
+  white-space: nowrap;
+  transition: border-color var(--d-fast) var(--ease-out);
+}
+
+.marker::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: calc(-10px - var(--lift, 0px));
+  width: 1px;
+  height: calc(10px + var(--lift, 0px));
+  background: var(--line-2);
+}
+
+.marker:hover {
+  border-color: var(--ink-2);
+}
+
+.animate .marker {
+  animation: appear var(--d-slow) var(--ease-out) 500ms both;
+}
+
+@keyframes appear {
+  from {
+    opacity: 0;
+    transform: translate(-50%, calc(-100% - 2px - var(--lift, 0px)));
+  }
+}
+
+.swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  background: var(--share);
+}
+
+.code {
+  font-family: var(--font-mono);
+  font-size: var(--t-xs);
+  font-weight: var(--w-medium);
+  letter-spacing: 0.04em;
+}
+
+.count {
+  font-family: var(--font-mono);
+  font-size: var(--t-md);
+  font-weight: var(--w-bold);
+  font-variant-numeric: tabular-nums;
+}
+
+.sim {
+  padding: 0 var(--s-1);
+  border: 1px solid var(--line-2);
+  border-radius: 4px;
+  color: var(--ink-2);
+  font-family: var(--font-mono);
+  font-size: var(--t-xs);
+  letter-spacing: 0.04em;
+}
+
+.badge {
+  padding: 2px var(--s-2);
+  border-radius: var(--r-full);
+  background: var(--foryou);
+  color: var(--paper);
+  font-size: var(--t-xs);
+  font-weight: var(--w-medium);
+}
+
+.note {
+  position: absolute;
+  top: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: var(--s-1) var(--s-3);
+  border-radius: var(--r-full);
+  background: var(--surface);
+  color: var(--ink-2);
+  font-size: var(--t-xs);
+}
+
+:global(.maplibregl-ctrl-attrib) {
+  font-size: 11px;
+}

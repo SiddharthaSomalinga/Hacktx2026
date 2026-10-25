@@ -88,6 +88,23 @@ def test_building_summary_and_detail_shape(world: World) -> None:
     assert world.phone().error("GET", "/api/buildings/nope") == (404, "building_not_found")
 
 
+def test_seat_lookup_places_a_seat_for_qr_links(world: World) -> None:
+    """D53: /seat/:id needs the building, floor and table without scanning every building."""
+    world.node.set("s2", PERSON)
+    world.node.post()
+    assert world.phone().ok("GET", "/api/seats/s2") == {
+        "id": "s2",
+        "building_id": "lib",
+        "floor": 1,
+        "table_id": "t1",
+        "table_label": "Table 01",
+        "position": 2,
+        "state": "occupied",
+    }
+    assert world.phone().ok("GET", "/api/seats/x1-s1")["building_id"] == "sim"
+    assert world.phone().error("GET", "/api/seats/nope") == (404, "seat_not_found")
+
+
 def test_etag_round_trip_and_snapshot_cache(make_world: Callable[..., World]) -> None:
     w = make_world(map_cache_s=1)
     w.node.post()

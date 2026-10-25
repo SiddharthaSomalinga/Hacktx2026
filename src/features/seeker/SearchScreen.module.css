@@ -1,0 +1,43 @@
+.place {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  min-height: 52px;
+}
+
+.place svg {
+  color: var(--ink-2);
+}
+
+.n {
+  margin-left: auto;
+  font-size: var(--t-md);
+}
+
+.timer {
+  display: flex;
+  align-items: center;
+  gap: var(--s-4);
+}
+
+.track {
+  fill: none;
+  stroke: var(--line);
+  stroke-width: 4;
+}
+
+.progress {
+  fill: none;
+  stroke: var(--foryou);
+  stroke-width: 4;
+  stroke-linecap: round;
+  stroke-dasharray: 1;
+  transform: rotate(-90deg);
+  transform-origin: center;
+  transition: stroke-dashoffset 1s linear;
+}
+
+.left {
+  font-size: var(--t-lg);
+  font-weight: var(--w-medium);
+}

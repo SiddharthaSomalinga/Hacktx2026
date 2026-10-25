@@ -7,8 +7,8 @@ Session log. Concrete changes, commands and observed results only.
 - **Milestone:** all branches integrated in `v1final` (D40); the two-phone flow works in the
   browser with live Muse (Session 7). Remaining: the Tiger migration for D43, Q14 (demo-table
   sensors), and the D36 Vultr deploy.
-- **Tests:** 205 pass with Postgres (`make test-db`); 174 pass and 29 skip without it. Live e2e: 114/114 (Session 6).
-- **Open questions:** Q14 (PLAN). Q2, U1, U2 and U3 resolved.
+- **Tests:** 211 pass with Postgres (`make test-db`); 182 pass and 29 skip without it. Live e2e: 114/114 (Session 6).
+- **Open questions:** Q14, Q19, Q20 (PLAN). Q2, U1, U2 and U3 resolved.
 
 ---
 
@@ -449,6 +449,41 @@ Caught before committing:
   `make db-init seed` from `backend/` before deploying this commit.
 - **`make seed` on the e2e database** failed on the e2e-only fixture tables (simulated seats
   per table); only the users upsert was applied there. Tiger has no such tables.
+
+## 2026-10-25 — Session 8: frontend redo decisions (D44–D53)
+
+### Found (review of `v1final`'s frontend, checked against the code)
+- Mock data shown as live: `seedBuildings` uses ids `union`/`sac` (the backend has `wel`), one
+  seed seat grid is reused for every building, seat `A4` is hard-coded as recommended, history
+  shows a fixed 54 beside a CSS curve, and "Live"/"Updated just now" are unconditional.
+- Failed requests are swallowed (`.catch(() => {})` in 10 places); "Demo users are loading…"
+  never clears after a failure.
+- Seat colors: open = blue, occupied = green (FR-7 says green = open, red = occupied).
+- The dark-mode toggle changes no colors; the manifest has no icons; nothing subscribes to
+  push; the service worker caches nothing; there is no router.
+- MapLibre 6.15.0 builds its worker URL at runtime, so the production build requests
+  `/assets/maplibre-gl-worker.mjs`, which does not exist (the backend answers with
+  `index.html`).
+- `/api/recommend` is never called. Polls run at 1.5–3 s and do not pause in a hidden tab.
+- API gaps: block/report need a user id no response carries; no seat lookup for
+  `/seat/:id`; the match has only the building's name; `GET /search/:id` cannot tell a
+  joined search from a preview.
+
+### Decisions
+- D44–D53 (PLAN): the redo on `v2-frontendredo`, the live floor plan, the map-first flow,
+  dark palette, self-hosted map tiles, hosting from your chair, push in context, the FR-8
+  denominator, the stack, and the API additions. Q15–Q18 resolved by them; Q19 and Q20 open.
+
+### Changes
+- PLAN: D44–D53, Q15–Q20, the Branches table, F3.6 and F4.5.2 wording.
+- ARCHITECTURE §7 and §14: the pre-D43 text on names, icebreaker inputs and the request push.
+
+### Backend for D53
+- `GET /api/seats/:id` (`MapService.seat`); `SafetyService` resolves the other person from a
+  `request_id` or `match_id` and returns `not_your_request` / `not_in_match` to outsiders;
+  `MatchOut` gains `building_id`, `table_id`; `SearchStatusOut` gains `request_id`, `joined`,
+  `label`, `offered_group`. REQUIREMENTS §7 and ARCH §13 updated.
+- `make check`: ruff, mypy clean, 182 passed, 29 skipped. `make test-db`: 211 passed.
 
 ## Next steps
 1. **Tiger migration (before any deploy of `v1final`):** on a hotspot, from `backend/`, run

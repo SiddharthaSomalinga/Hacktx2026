@@ -1,0 +1,38 @@
+.status {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  font-weight: var(--w-medium);
+  color: var(--ink-2);
+}
+
+.dot {
+  width: 10px;
+  height: 10px;
+  border-radius: var(--r-full);
+  background: var(--ink-3);
+}
+
+.findable {
+  color: var(--ink);
+}
+
+.findable .dot {
+  background: var(--open);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--open) 20%, transparent);
+}
+
+.link {
+  color: var(--accent-text);
+  font-weight: var(--w-medium);
+}
+
+.confirm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  padding: var(--s-4);
+  border: 1px solid var(--likely);
+  border-radius: var(--r-lg);
+  background: var(--likely-fill);
+}

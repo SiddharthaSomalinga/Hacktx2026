@@ -1,0 +1,265 @@
+.root {
+  position: absolute;
+  inset: 72px var(--s-3) calc(var(--canvas-bottom, 0px) + var(--s-3)) var(--s-3);
+  overflow: hidden;
+}
+
+@media (min-width: 1024px) {
+  .root {
+    inset: 84px var(--s-6) var(--s-6) 448px;
+  }
+}
+
+.grid,
+.stage {
+  position: absolute;
+  inset: 0;
+}
+
+.stage {
+  transform-origin: 0 0;
+  transition: transform var(--d-slow) var(--ease-out);
+}
+
+.drawing {
+  overflow: visible;
+}
+
+/* Drafting frame and grid bubbles */
+.frame {
+  fill: none;
+  stroke: var(--line-2);
+  stroke-width: 1;
+}
+
+.gridLine {
+  stroke: var(--grid);
+  stroke-width: 1;
+  stroke-dasharray: 2 4;
+}
+
+.bubble {
+  fill: var(--paper);
+  stroke: var(--line-2);
+}
+
+.bubbleText {
+  fill: var(--ink-2);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-anchor: middle;
+  dominant-baseline: central;
+}
+
+/* Tables */
+.table {
+  fill: var(--surface-2);
+  stroke: var(--ink-3);
+  stroke-width: 1.25;
+}
+
+.tableLabel {
+  fill: var(--ink-2);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: var(--w-medium);
+  text-anchor: middle;
+  dominant-baseline: central;
+}
+
+.dim {
+  opacity: 0.35;
+  transition: opacity var(--d-slow) var(--ease-out);
+}
+
+/* Chairs: state by shape and color (D45) */
+.body,
+.back {
+  stroke-width: 2;
+  transition:
+    fill var(--d-slow) var(--ease-out),
+    stroke var(--d-slow) var(--ease-out);
+}
+
+.back {
+  stroke: none;
+}
+
+.open .body {
+  fill: var(--surface);
+  stroke: var(--open);
+}
+.open .back {
+  fill: var(--open);
+}
+
+.occupied .body {
+  fill: var(--occupied-fill);
+  stroke: var(--occupied);
+}
+.occupied .back {
+  fill: var(--occupied);
+}
+
+.likely_opening .body {
+  fill: var(--likely-fill);
+  stroke: var(--likely);
+  stroke-width: 1.75;
+  stroke-dasharray: 5 3.5;
+}
+.likely_opening .back {
+  fill: var(--likely);
+}
+
+.bag rect {
+  fill: var(--likely);
+}
+.bag path {
+  fill: none;
+  stroke: var(--likely);
+  stroke-width: 1.5;
+}
+
+.offline .body {
+  fill: url(#gs-hatch);
+  stroke: var(--offline);
+  stroke-width: 1.5;
+}
+.offline .back {
+  fill: var(--offline);
+}
+
+.selected {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 2;
+}
+
+/* Recommended or assigned seat (FR-12): a double ring in "for you" blue */
+.ring rect {
+  fill: none;
+  stroke: var(--foryou);
+  stroke-width: 2;
+}
+.ring rect + rect {
+  stroke-width: 1;
+  opacity: 0.6;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: pulse 1.8s var(--ease-out) infinite;
+}
+
+@keyframes pulse {
+  0% {
+    opacity: 0.7;
+    transform: scale(0.92);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.18);
+  }
+}
+
+/* Draw-in: lines trace themselves, then each chair settles into its state */
+.animate .frame {
+  stroke-dasharray: 1;
+  animation: draw var(--d-draw) var(--ease-out) both;
+}
+
+.animate .table,
+.animate .body {
+  stroke-dasharray: 1;
+  animation:
+    draw var(--d-draw) var(--ease-out) var(--delay, 0ms) both,
+    settle var(--d-slow) var(--ease-out) calc(var(--delay, 0ms) + 600ms) both;
+}
+
+.animate .likely_opening .body {
+  animation:
+    draw var(--d-draw) var(--ease-out) var(--delay, 0ms) both,
+    settle var(--d-slow) var(--ease-out) calc(var(--delay, 0ms) + 600ms) both,
+    dashes 1ms linear calc(var(--delay, 0ms) + var(--d-draw)) both;
+}
+
+.animate .back,
+.animate .bag,
+.animate .tableLabel,
+.animate .ring {
+  animation: appear var(--d-slow) var(--ease-out) calc(var(--delay, 0ms) + 600ms) both;
+}
+
+@keyframes draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes settle {
+  from {
+    fill: transparent;
+  }
+}
+
+@keyframes dashes {
+  to {
+    stroke-dasharray: 5 3.5;
+  }
+}
+
+@keyframes appear {
+  from {
+    opacity: 0;
+  }
+}
+
+/* Interaction layer: real buttons over the drawing */
+.tableHit,
+.seatHit {
+  position: absolute;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  border-radius: var(--r-sm);
+}
+
+.tableHit:hover {
+  background: color-mix(in srgb, var(--ink) 5%, transparent);
+}
+
+.seatHit {
+  border-radius: 10px;
+}
+
+.seatHit:hover {
+  background: color-mix(in srgb, var(--ink) 7%, transparent);
+}
+
+.tag {
+  position: absolute;
+  padding: 2px var(--s-2);
+  border-radius: var(--r-full);
+  background: var(--foryou);
+  color: var(--paper);
+  font-size: var(--t-xs);
+  font-weight: var(--w-medium);
+  white-space: nowrap;
+  pointer-events: none;
+  transform-origin: center;
+}
+
+.empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--ink-2);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stage {
+    transition: none;
+  }
+}

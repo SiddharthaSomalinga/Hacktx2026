@@ -1,10 +1,20 @@
 {
+  "id": "/",
   "name": "Ghost Seats",
   "short_name": "Ghost Seats",
-  "description": "Find an open seat and someone studying the same thing.",
+  "description": "Open library seats right now, and someone studying the same thing.",
+  "lang": "en-US",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
-  "background_color": "#f7f2ed",
-  "theme_color": "#bf5700",
-  "icons": []
+  "orientation": "portrait",
+  "background_color": "#f5f2ec",
+  "theme_color": "#f5f2ec",
+  "categories": ["education", "productivity"],
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "/icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
 }

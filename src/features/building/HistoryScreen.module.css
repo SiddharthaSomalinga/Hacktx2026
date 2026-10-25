@@ -1,0 +1,79 @@
+.figure {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  margin: 0;
+}
+
+.readout {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-2);
+}
+
+.readout :global(.mono) {
+  font-size: var(--t-xl);
+  font-weight: var(--w-medium);
+  line-height: 1;
+}
+
+.svg {
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.gridline {
+  stroke: var(--line);
+  stroke-width: 1;
+}
+
+.axis,
+.peak {
+  fill: var(--ink-2);
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+
+.bar {
+  fill: color-mix(in srgb, var(--ink) 30%, var(--surface));
+  transition: fill var(--d-fast) var(--ease-out);
+}
+
+.partial {
+  fill: none;
+  stroke: color-mix(in srgb, var(--ink) 45%, var(--surface));
+  stroke-dasharray: 2 2;
+}
+
+.barActive {
+  fill: var(--ink);
+}
+
+.partial.barActive {
+  fill: none;
+  stroke: var(--ink);
+}
+
+.hit {
+  fill: transparent;
+  cursor: pointer;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--t-xs);
+}
+
+.table th,
+.table td {
+  padding: var(--s-2) 0;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+}
+
+.table th {
+  color: var(--ink-2);
+  font-weight: var(--w-medium);
+}

@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.domain.types import (
     Group,
@@ -119,6 +119,16 @@ class HistoryPoint(Strict):
     open_avg: float
 
 
+class SeatLookup(Strict):
+    id: str
+    building_id: str
+    floor: int
+    table_id: str
+    table_label: str
+    position: int
+    state: PublicState
+
+
 # --- Accounts ---------------------------------------------------------------
 
 
@@ -183,6 +193,10 @@ class SearchStatusOut(Strict):
     seconds_left: int
     match_id: str | None = None
     asking: Person | None = None  # D43: the host holding the pending request
+    request_id: str | None = None  # D53: that pending request
+    joined: bool  # D53: False while the search is a preview
+    label: str
+    offered_group: Group
 
 
 class SearchCancelOut(Strict):
@@ -261,7 +275,9 @@ class MatchOut(Strict):
     other_first_name: str
     other_major: str | None
     building: str
+    building_id: str
     floor: int
+    table_id: str
     table_label: str
     assigned_seat_id: str | None
     alt_seat_id: str | None
@@ -277,11 +293,20 @@ class MatchStatusOut(Strict):
 
 
 class BlockIn(Strict):
-    user_id: str = Field(min_length=1, max_length=64)
+    """Exactly one way to name the other person (D53): the request or match identifies them."""
+
+    user_id: str | None = Field(None, min_length=1, max_length=64)
+    request_id: str | None = Field(None, min_length=1, max_length=64)
+    match_id: str | None = Field(None, min_length=1, max_length=64)
+
+    @model_validator(mode="after")
+    def _exactly_one(self) -> BlockIn:
+        if sum(v is not None for v in (self.user_id, self.request_id, self.match_id)) != 1:
+            raise ValueError("give exactly one of user_id, request_id or match_id")
+        return self
 
 
-class ReportIn(Strict):
-    user_id: str = Field(min_length=1, max_length=64)
+class ReportIn(BlockIn):
     reason: str = Field(min_length=1, max_length=500)
 
 
