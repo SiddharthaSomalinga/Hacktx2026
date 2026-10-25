@@ -50,19 +50,25 @@ function App() {
         setSelectedBuilding((current) => data.find((building) => building.id === current.id) || data[0])
       }
     }).catch(() => {})
-    const interval = window.setInterval(() => api.buildings().then((data) => data?.length && setBuildings(data)).catch(() => {}), 15000)
+    const interval = window.setInterval(() => api.buildings().then((data) => data?.length && setBuildings(data)).catch(() => {}), 2000)
     if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {})
     return () => window.clearInterval(interval)
   }, [])
 
   useEffect(() => {
     if (!selectedBuilding?.id) return undefined
-    api.building(selectedBuilding.id).then((data) => {
-      setBuildingDetail(data)
-      if (data.floors?.length && !data.floors.some((item) => item.floor === floor)) setFloor(data.floors[0].floor)
-    }).catch(() => setBuildingDetail(null))
-    return undefined
-  }, [selectedBuilding?.id])
+    const loadDetail = () => {
+      api.building(selectedBuilding.id).then((data) => {
+        if (data) {
+          setBuildingDetail(data)
+          if (data.floors?.length && !data.floors.some((item) => item.floor === floor)) setFloor(data.floors[0].floor)
+        }
+      }).catch(() => setBuildingDetail(null))
+    }
+    loadDetail()
+    const detailTimer = window.setInterval(loadDetail, 1500)
+    return () => window.clearInterval(detailTimer)
+  }, [selectedBuilding?.id, floor])
 
   useEffect(() => {
     if (view !== 'history' || !selectedBuilding?.id) return undefined
@@ -125,9 +131,9 @@ function App() {
 }
 
 function MapView({ buildings, selectedBuilding, chooseBuilding, floor, setFloor, selectedSeat, setSelectedSeat, query, setQuery, openSeats, buildingDetail }) {
-  return <main><section className="hero"><div className="hero-copy"><span className="eyebrow"><span className="live-dot" /> Austin campus · updated just now</span><h1>Start anywhere.<br /><em>Find your table.</em></h1><p>See what’s actually open, then find someone studying the same thing.<br />No wandering. No awkward cold starts.</p></div><div className="hero-note"><Sparkles size={17} /><span><strong>{openSeats} open seats</strong><br />across the campus right now</span></div></section>
+  return <main><section className="hero"><div className="hero-copy"><span className="eyebrow"><span className="live-dot" /> Austin campus · updated just now</span><h1>Start anywhere.<br /><em>Find your table.</em></h1><p>See what’s actually vacant, then find someone studying the same thing.<br />No wandering. No awkward cold starts.</p></div><div className="hero-note"><Sparkles size={17} /><span><strong>{openSeats} vacant seats</strong><br />across the campus right now</span></div></section>
     <section className="campus-section"><div className="section-heading"><div><span className="eyebrow">Campus map <span className="muted-separator">/</span> UT Austin · Main campus</span><h2>Start anywhere on campus.</h2><p>Search a building to jump from the quad to its live classroom map.</p></div><div className="search-box"><Search size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search buildings, libraries..." /><kbd>⌘ K</kbd></div></div><div className="map-stage"><div className="map-grid" /><div className="map-water" /><div className="map-road road-a" /><div className="map-road road-b" /><div className="map-block block-a" /><div className="map-block block-b" /><div className="map-block block-c" /><div className="map-label label-gdc" onClick={() => chooseBuilding(buildings.find((b) => b.id === 'gdc') || selectedBuilding)}>GDC Study Hall</div><div className="map-label label-union" onClick={() => chooseBuilding(buildings.find((b) => b.id === 'union') || selectedBuilding)}>Texas Union</div><div className="map-label label-pcl" onClick={() => chooseBuilding(buildings.find((b) => b.id === 'pcl') || selectedBuilding)}>PCL Library</div><div className="map-label label-sac" onClick={() => chooseBuilding(buildings.find((b) => b.id === 'sac') || selectedBuilding)}>Student Activity Center</div><div className="map-center"><MapPin size={14} /> Select a building marker to zoom in</div><div className="map-controls"><button>+</button><button>−</button><button><Compass size={16} /></button></div><span className="map-attribution">Map view · campus occupancy</span></div><div className="map-legend"><span><i className="legend-live" /> Live building data</span><span><i className="legend-simulated" /> Simulated building</span><span className="map-scale">500 ft <b /></span></div></section>
-    <section className="workspace"><aside className="building-list"><div className="list-heading"><span className="eyebrow">Nearby buildings</span><span>Updated just now</span></div>{buildings.map((building) => <button className={`building-row ${selectedBuilding.id === building.id ? 'selected' : ''}`} key={building.id} onClick={() => chooseBuilding(building)}><span className={`building-icon ${building.color}`}>{building.short}</span><span className="building-meta"><strong>{building.name}</strong><small>{building.distance} · {building.floors} floors</small></span><span className="building-count"><strong>{building.open}</strong><small>open</small></span></button>)}</aside><SeatMap building={selectedBuilding} detail={buildingDetail} floor={floor} setFloor={setFloor} selectedSeat={selectedSeat} setSelectedSeat={setSelectedSeat} /></section></main>
+    <section className="workspace"><aside className="building-list"><div className="list-heading"><span className="eyebrow">Nearby buildings</span><span>Updated just now</span></div>{buildings.map((building) => <button className={`building-row ${selectedBuilding.id === building.id ? 'selected' : ''}`} key={building.id} onClick={() => chooseBuilding(building)}><span className={`building-icon ${building.color}`}>{building.short}</span><span className="building-meta"><strong>{building.name}</strong><small>{building.distance} · {building.floors} floors</small></span><span className="building-count"><strong>{building.open}</strong><small>vacant</small></span></button>)}</aside><SeatMap building={selectedBuilding} detail={buildingDetail} floor={floor} setFloor={setFloor} selectedSeat={selectedSeat} setSelectedSeat={setSelectedSeat} /></section></main>
 }
 
 function SeatMap({ building, detail, floor, setFloor, selectedSeat, setSelectedSeat }) {
@@ -135,7 +141,10 @@ function SeatMap({ building, detail, floor, setFloor, selectedSeat, setSelectedS
   const liveSeats = floorData?.tables?.flatMap((table) => table.seats.map((seat) => [seat.id, seat.state]))
   const seats = liveSeats?.length ? liveSeats : seedSeats
   const counts = seats.reduce((result, [, status]) => ({ ...result, [status]: (result[status] || 0) + 1 }), {})
-  return <div className="seat-panel"><div className="seat-heading"><div><span className="eyebrow">Seat map <span className="live-pill"><span /> Live</span></span><h2>{building.name}</h2><p>Floor {floor} <span>·</span> Occupancy from seat nodes</p></div><label className="floor-select">Floor {floor}<select value={floor} onChange={(event) => setFloor(Number(event.target.value))}>{(detail?.floors || Array.from({ length: building.floors }, (_, index) => ({ floor: index + 1 }))).map((item) => <option key={item.floor} value={item.floor}>Floor {item.floor}</option>)}</select><ChevronDown size={15} /></label></div><div className="seat-toolbar"><span><i className="seat-key open" />Open <strong>{counts.open || 0}</strong></span><span><i className="seat-key occupied" />Occupied <strong>{counts.occupied || 0}</strong></span><span><i className="seat-key likely" />Likely open <strong>{counts.likely_opening || counts.likely || 0}</strong></span><span className="toolbar-note">Click a seat for details</span></div><div className="seat-canvas"><div className="table-label label-one">Window bar</div><div className="table-label label-two">Group tables</div><div className="seat-grid">{seats.map(([id, status]) => <button key={id} className={`seat ${status} ${selectedSeat === id ? 'selected' : ''}`} onClick={() => setSelectedSeat(id)}><span>{id}</span>{status === 'open' && <i />}</button>)}</div><div className="seat-annotation"><Zap size={14} /> Seats pulse when a recommendation is ready</div></div>{selectedSeat && <div className="seat-detail"><div><span className={`seat-status ${seats.find(([id]) => id === selectedSeat)?.[1]}`}>{selectedSeat}</span><strong>{selectedSeat === 'A4' ? 'Recommended for you' : 'Table seat'}</strong><small>{selectedSeat === 'A4' ? 'Good light · quiet corner · likely open' : `Floor ${floor} · Group tables`}</small></div><button className="primary-button small" onClick={() => setSelectedSeat(null)}>Close <X size={14} /></button></div>}</div>
+  const selectedSeatStatus = seats.find(([id]) => id === selectedSeat)?.[1]
+  const statusLabel = (s) => (s === 'open' ? 'Vacant' : s === 'occupied' ? 'Occupied' : (s === 'likely' || s === 'likely_opening') ? 'Likely Vacant' : s === 'away' ? 'Away' : s || 'Unknown')
+
+  return <div className="seat-panel"><div className="seat-heading"><div><span className="eyebrow">Seat map <span className="live-pill"><span /> Live</span></span><h2>{building.name}</h2><p>Floor {floor} <span>·</span> Occupancy from seat nodes</p></div><label className="floor-select">Floor {floor}<select value={floor} onChange={(event) => setFloor(Number(event.target.value))}>{(detail?.floors || Array.from({ length: building.floors }, (_, index) => ({ floor: index + 1 }))).map((item) => <option key={item.floor} value={item.floor}>Floor {item.floor}</option>)}</select><ChevronDown size={15} /></label></div><div className="seat-toolbar"><span><i className="seat-key open" />Vacant <strong>{counts.open || 0}</strong></span><span><i className="seat-key occupied" />Occupied <strong>{counts.occupied || 0}</strong></span><span><i className="seat-key likely" />Likely vacant <strong>{counts.likely_opening || counts.likely || 0}</strong></span><span className="toolbar-note">Click a seat for details</span></div><div className="seat-canvas"><div className="table-label label-one">Window bar</div><div className="table-label label-two">Group tables</div><div className="seat-grid">{seats.map(([id, status]) => <button key={id} className={`seat ${status} ${selectedSeat === id ? 'selected' : ''}`} onClick={() => setSelectedSeat(id)}><span>{id}</span>{status === 'open' && <i />}</button>)}</div><div className="seat-annotation"><Zap size={14} /> Seats pulse when a recommendation is ready</div></div>{selectedSeat && <div className="seat-detail"><div><span className={`seat-status ${selectedSeatStatus}`}>{statusLabel(selectedSeatStatus)}</span><strong>{selectedSeat === 'A4' ? 'Recommended for you' : `Seat ${selectedSeat}`}</strong><small>{selectedSeat === 'A4' ? 'Good light · quiet corner · likely vacant' : `Floor ${floor} · Group tables`}</small></div><button className="primary-button small" onClick={() => setSelectedSeat(null)}>Close <X size={14} /></button></div>}</div>
 }
 
 function HistoryView({ building, points }) {
