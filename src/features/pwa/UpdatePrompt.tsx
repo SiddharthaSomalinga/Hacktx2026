@@ -16,7 +16,7 @@ export function UpdatePrompt() {
     const workbox = new Workbox('/sw.js', { scope: '/' })
     workbox.addEventListener('waiting', () => setWaiting(true))
     workbox.addEventListener('controlling', () => window.location.reload())
-    void workbox.register()
+    workbox.register().catch((error: unknown) => console.warn('service worker not registered:', error))
     setWb(workbox)
     // A notification tap while the app is open: the service worker asks this tab to navigate.
     const onMessage = (e: MessageEvent) => {
