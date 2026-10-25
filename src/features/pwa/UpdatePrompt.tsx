@@ -15,7 +15,10 @@ export function UpdatePrompt() {
     if (!import.meta.env.PROD || !('serviceWorker' in navigator)) return
     const workbox = new Workbox('/sw.js', { scope: '/' })
     workbox.addEventListener('waiting', () => setWaiting(true))
-    workbox.addEventListener('controlling', () => window.location.reload())
+    // Reload only when an accepted update takes over, never on the first install.
+    workbox.addEventListener('controlling', (event) => {
+      if (event.isUpdate) window.location.reload()
+    })
     workbox.register().catch((error: unknown) => console.warn('service worker not registered:', error))
     setWb(workbox)
     // A notification tap while the app is open: the service worker asks this tab to navigate.
