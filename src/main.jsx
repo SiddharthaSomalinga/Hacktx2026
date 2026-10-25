@@ -41,10 +41,12 @@ function App() {
   const [showTopic, setShowTopic] = useState(false)
   const [showSearch, setShowSearch] = useState(false)
   const [hostOpen, setHostOpen] = useState(false)
-  const [hostLinked, setHostLinked] = useState(false)
+  const [host, setHost] = useState(null) // the server's host session: {seat_id, label, status, hidden_reason, muted}
   const [searching, setSearching] = useState(false)
+  const [search, setSearch] = useState(null) // {id, label, status, seconds_left}
+  const [matchId, setMatchId] = useState(null)
   const [match, setMatch] = useState(null)
-  const [inbox, setInbox] = useState([{ id: 1, name: 'Maya', course: 'CH 320M', table: 'PCL · Floor 2', expires: '02:41' }])
+  const [inbox, setInbox] = useState([])
   const [darkMode, setDarkMode] = useState(() => window.localStorage.getItem('ghost-seats-theme') === 'dark')
 
   useEffect(() => {
@@ -87,6 +89,42 @@ function App() {
     return undefined
   }, [view, selectedBuilding?.id])
 
+  // The server is the source of truth for roles: poll who we are, what we host, what we're in.
+  useEffect(() => {
+    if (!user) return undefined
+    refreshMe()
+    const timer = window.setInterval(refreshMe, 3000)
+    return () => window.clearInterval(timer)
+  }, [user?.id])
+
+  useEffect(() => {
+    if (!host) { setInbox([]); return undefined }
+    const load = () => api.inbox().then((items) => setInbox(items || [])).catch(() => {})
+    load()
+    const timer = window.setInterval(load, 3000)
+    return () => window.clearInterval(timer)
+  }, [host?.session_id])
+
+  useEffect(() => {
+    if (!search?.id) return undefined
+    const poll = () => api.searchStatus(search.id).then((result) => {
+      if (result.match_id) { setSearch(null); setSearching(false); openMatch(result.match_id) }
+      else if (result.status === 'exhausted') { setSearch(null); setSearching(false); setNotice('No one’s free right now. Try a recommended seat.') }
+      else if (result.status !== 'active') { setSearch(null); setSearching(false) }
+      else setSearch((current) => current && { ...current, seconds_left: result.seconds_left })
+    }).catch(() => {})
+    const timer = window.setInterval(poll, 2000)
+    return () => window.clearInterval(timer)
+  }, [search?.id])
+
+  useEffect(() => {
+    if (!matchId) return undefined
+    const load = () => api.match(matchId).then(setMatch).catch(() => {})
+    load()
+    const timer = window.setInterval(load, 2000)
+    return () => window.clearInterval(timer)
+  }, [matchId])
+
   useEffect(() => {
     if (!notice) return undefined
     const timeout = window.setTimeout(() => setNotice(''), 3200)
@@ -102,23 +140,76 @@ function App() {
       setUser(nextUser); setShowLogin(false); setShowTopic(true)
     }).catch(() => setNotice('Unable to sign in'))
   }
+  function refreshMe() {
+    return api.me().then((data) => {
+      setHost(data?.host || null)
+      if (data?.host) setHostOpen(true)
+      if (data?.search_id) setSearch((current) => current || { id: data.search_id, status: 'active' })
+      if (data?.match_id) setMatchId((current) => {
+        if (current !== data.match_id) setView('match')
+        return data.match_id
+      })
+    }).catch(() => {})
+  }
+  function openMatch(id) { setMatchId(id); setView('match') }
   function saveTopic() {
     const nextTopic = topic.trim()
-    const save = user && nextTopic ? api.topic(nextTopic).catch(() => null) : Promise.resolve()
-    save.then(() => { if (user) setUser({ ...user, topic: nextTopic }); setShowTopic(false); setNotice(nextTopic ? `Studying ${nextTopic}` : 'Topic skipped') })
+    setShowTopic(false)
+    if (user) setUser({ ...user, topic: nextTopic })
+    if (!nextTopic) { setNotice('Topic skipped'); return }
+    // A seeker's topic goes into their search; only a linked host stores it on the server.
+    if (!host) { setNotice(`Studying ${nextTopic}`); return }
+    api.topic(nextTopic).then((result) => { setNotice(`Studying ${result.label}`); refreshMe() }).catch((error) => setNotice(error.message))
   }
-  function startSearch() {
-    setSearching(true); setShowSearch(false); setNotice('Looking for someone nearby')
-    api.search(user?.topic || topic || 'anything').then((result) => api.searchStatus(result.search_id)).then((result) => {
-      if (result.match_id) return api.match(result.match_id)
-      throw new Error('No match yet')
-    }).then((result) => {
-      setSearching(false); setMatch({ name: result.other_first_name, topic: result.subject || user?.topic || 'your subject', building: result.building, seat: result.assigned_seat_id, floor: result.floor, icebreaker: result.icebreaker, matchId: result.match_id }); setView('match')
-    }).catch(() => {
-      setSearching(false); setNotice('No nearby match yet')
-    })
+  async function startSearch() {
+    setShowSearch(false); setSearching(true)
+    try {
+      const result = await api.search(user?.topic || topic || 'anything')
+      if (!result.has_real_hosts) {
+        await api.cancelSearch(result.search_id)
+        setSearching(false); setNotice(`No one studying ${result.label} can take a request right now`)
+        return
+      }
+      const joined = await api.joinSearch(result.search_id)
+      setSearch({ id: result.search_id, label: result.label, status: joined.status, seconds_left: joined.seconds_left })
+      setNotice(`Asking someone studying ${result.label}`)
+    } catch (error) {
+      setSearching(false); setNotice(error.message)
+    }
   }
-  function logout() { setUser(null); api.logout().catch(() => {}); setNotice('Signed out') }
+  function cancelSearch() {
+    if (!search?.id) return
+    api.cancelSearch(search.id).finally(() => { setSearch(null); setSearching(false); setNotice('Search cancelled') })
+  }
+  function linkSeat(seatId) {
+    api.linkSeat(seatId)
+      .then(() => (user?.topic || topic.trim()) && api.topic(user?.topic || topic.trim()))
+      .then(() => { setSelectedSeat(seatId); setNotice(`Linked to seat ${seatId}`); return refreshMe() })
+      .catch((error) => setNotice(error.message))
+  }
+  function toggleHost(open) {
+    // D17: turning host mode on only opens setup; linking a seat creates the session.
+    if (open || !host) { setHostOpen(open); return }
+    api.toggleHost(false).then(() => { setHost(null); setHostOpen(false); setNotice('Host mode off') }).catch((error) => setNotice(error.message))
+  }
+  function answerRequest(requestId, action) {
+    const call = action === 'accept' ? api.acceptRequest(requestId) : api.declineRequest(requestId, action === 'mute')
+    call.then((result) => {
+      setInbox((items) => items.filter((item) => item.request_id !== requestId))
+      if (action === 'accept') openMatch(result.match_id)
+      else { setNotice(action === 'mute' ? 'Request declined and muted' : 'Request declined'); refreshMe() }
+    }).catch((error) => setNotice(error.message))
+  }
+  function finishMatch(action) {
+    const call = action === 'arrived' ? api.arrived(matchId) : api.cancelMatch(matchId)
+    call.then(() => api.match(matchId)).then(setMatch).catch((error) => setNotice(error.message))
+  }
+  function leaveMatch() { setMatchId(null); setMatch(null); setView('map'); refreshMe() }
+  function logout() {
+    api.logout().catch(() => {})
+    setUser(null); setHost(null); setHostOpen(false); setSearch(null); setSearching(false); setMatchId(null); setMatch(null); setInbox([])
+    setNotice('Signed out')
+  }
 
   return <div className="app-shell">
     <header className="topbar">
@@ -132,10 +223,10 @@ function App() {
     </nav>}
     {view === 'map' && <MapView buildings={filteredBuildings} selectedBuilding={selectedBuilding} chooseBuilding={chooseBuilding} floor={floor} setFloor={setFloor} selectedSeat={selectedSeat} setSelectedSeat={setSelectedSeat} query={query} setQuery={setQuery} openSeats={openSeats} buildingDetail={buildingDetail} />}
     {view === 'history' && <HistoryView building={selectedBuilding} points={history} />}
-    {view === 'host' && <HostView user={user} hostOpen={hostOpen} setHostOpen={setHostOpen} hostLinked={hostLinked} setHostLinked={setHostLinked} setSelectedSeat={setSelectedSeat} onLogin={() => setShowLogin(true)} onToggleHost={(open) => api.toggleHost(open).then(() => setHostOpen(open)).catch(() => setNotice('Unable to update host mode'))} onLinkSeat={(seatId) => api.linkSeat(seatId).then(() => { setHostLinked(true); setSelectedSeat(seatId) }).catch(() => setNotice('Unable to link that seat'))} />}
-    {view === 'inbox' && <InboxView inbox={inbox} setInbox={setInbox} onMatch={(request) => { setMatch({ name: request.name, topic: request.course, building: 'PCL Library', seat: 'B4', icebreaker: 'What part of this class are you enjoying most?' }); setView('match') }} />}
-    {view === 'match' && <MatchView match={match} onBack={() => setView('map')} onDone={() => { setMatch(null); setView('map'); setNotice('Match closed') }} />}
-    <section className="action-strip"><div><span className="eyebrow">Make the next hour count</span><strong>Find a study partner who is already here.</strong></div><button className="primary-button" onClick={() => user ? setShowSearch(true) : setShowLogin(true)}><Users size={17} /> Find someone <ArrowUpRight size={16} /></button></section>
+    {view === 'host' && <HostView user={user} host={host} hostOpen={hostOpen} topic={user?.topic || topic} seatId={selectedSeat || 't1-s1'} onLogin={() => setShowLogin(true)} onToggleHost={toggleHost} onLinkSeat={linkSeat} onEditTopic={() => setShowTopic(true)} onMute={(muted) => api.muteHost(muted).then(refreshMe).catch((error) => setNotice(error.message))} onConfirm={() => api.confirmHost().then(refreshMe).catch((error) => setNotice(error.message))} />}
+    {view === 'inbox' && <InboxView inbox={inbox} hosting={Boolean(host)} onAnswer={answerRequest} />}
+    {view === 'match' && <MatchView match={match} onBack={leaveMatch} onAction={finishMatch} />}
+    <section className="action-strip">{search ? <><div><span className="eyebrow">Looking for a study partner</span><strong>Asking someone studying {search.label || 'your topic'}{search.seconds_left ? ` · ${search.seconds_left}s left` : ''}</strong></div><button className="primary-button" onClick={cancelSearch}><X size={17} /> Cancel search</button></> : <><div><span className="eyebrow">Make the next hour count</span><strong>Find a study partner who is already here.</strong></div><button className="primary-button" disabled={searching || Boolean(host) || match?.status === 'active'} onClick={() => user ? setShowSearch(true) : setShowLogin(true)}><Users size={17} /> {host ? 'Hosting now' : match?.status === 'active' ? 'In a match' : 'Find someone'} <ArrowUpRight size={16} /></button></>}</section>
     <footer className="footer"><span>Ghost Seats · UT Austin</span><span>Live occupancy · Central Time</span><span><Compass size={14} /> Built for the in-between moments</span></footer>
     {showLogin && <Modal title="Welcome to Ghost Seats" onClose={() => setShowLogin(false)}><p className="modal-copy">Choose a demo identity to explore the seeker and host flows.</p><div className="identity-list">{demoUsers.length ? demoUsers.map((demo) => <button key={demo.id} className="identity-row" onClick={() => login(demo.id)}><span className="avatar">{demo.first_name[0]}</span><span><strong>{demo.first_name}</strong><small>UT Austin student</small></span><ArrowUpRight size={16} /></button>) : <p className="modal-copy">Demo users are loading…</p>}</div></Modal>}
     {showTopic && <Modal title="What are you studying today?" onClose={() => setShowTopic(false)}><p className="modal-copy">A topic helps us find a useful match. You can skip this for now.</p><div className="topic-input"><BookOpen size={18} /><input autoFocus value={topic} onChange={(event) => setTopic(event.target.value)} placeholder="e.g. organic chemistry" onKeyDown={(event) => event.key === 'Enter' && saveTopic()} /></div><div className="modal-actions"><button className="quiet-button" onClick={() => { setShowTopic(false); setNotice('Topic skipped') }}>Skip for now</button><button className="primary-button" onClick={saveTopic}>Save topic <Check size={16} /></button></div></Modal>}
@@ -288,11 +379,45 @@ function HistoryView({ building, points }) {
   return <main className="simple-page"><span className="eyebrow">Seat history · last 24 hours</span><h1>When is {building.name} easiest to find?</h1><p className="lede">A quiet pattern is more useful than a perfect guess.</p><div className="history-card"><div className="chart-meta"><span>Average open seats</span><strong>{average} <small>seats</small></strong><em>{points.length ? 'Live history' : 'Waiting for history'}</em></div><div className="chart"><div className="chart-line" /><div className="chart-area" />{['12am', '4am', '8am', '12pm', '4pm', '8pm', 'now'].map((label) => <span key={label}>{label}</span>)}</div></div><div className="history-insight"><Sparkles size={18} /><div><strong>{points.length ? 'History is ready for this building.' : 'History will appear after occupancy data is recorded.'}</strong><span>Use the live seat map for the latest availability.</span></div></div></main>
 }
 
-function HostView({ user, hostOpen, setHostOpen, hostLinked, setSelectedSeat, onLogin, onToggleHost, onLinkSeat }) { return <main className="simple-page host-page"><span className="eyebrow">Host mode</span><h1>Make your seat easier<br /><em>to find.</em></h1><p className="lede">Let one person studying something similar join you. You’re always in control.</p>{!user ? <div className="empty-state"><UserRound size={25} /><strong>Log in to become a host.</strong><span>Your identity stays private until you accept a request.</span><button className="primary-button" onClick={onLogin}>Log in <ArrowUpRight size={15} /></button></div> : <div className="host-card"><div className="host-card-top"><div><span className="status-badge"><span className={hostOpen ? 'on' : ''} />{hostOpen ? 'Findable' : 'Hidden'}</span><h2>{hostOpen ? 'Your seat is visible.' : 'You are off the map.'}</h2><p>{hostOpen ? 'We’ll only send one request at a time.' : 'Turn on host mode when you’re ready.'}</p></div><button className={`toggle ${hostOpen ? 'on' : ''}`} onClick={() => onToggleHost(!hostOpen)} aria-label="Toggle host mode"><span /></button></div><div className="host-steps"><div className={hostLinked ? 'host-step complete' : 'host-step'}><span>{hostLinked ? <Check size={15} /> : '1'}</span><div><strong>Link your seat</strong><small>{hostLinked ? 'Seat linked' : 'Tap a seat on the map to link it'}</small></div>{!hostLinked && <button className="text-button" onClick={() => onLinkSeat('t1-s1')}>Link seat <ArrowUpRight size={14} /></button>}</div><div className="host-step"><span>2</span><div><strong>Choose a topic</strong><small>{user.topic || 'Add what you’re studying today'}</small></div><button className="text-button">Edit <ArrowUpRight size={14} /></button></div></div></div>}</main> }
+const hostStatusText = {
+  findable: ['Findable', 'Your seat is visible.', 'We’ll only send one request at a time.'],
+  needs_topic: ['Hidden', 'Add a topic to be findable.', 'Tell us what you’re studying.'],
+  away: ['Hidden', 'No one is at your seat.', 'Sit back down to be findable again.'],
+  muted: ['Muted', 'Requests are paused.', 'Unmute when you’re ready for a partner.'],
+  table_full: ['Hidden', 'Your table has no open seat.', 'You’ll be findable when a seat frees up.'],
+  in_match: ['In a match', 'Someone is on the way.', 'Open your match for the details.'],
+  confirm_pending: ['Hidden', 'Still open to partners?', 'Confirm to stay findable.'],
+}
 
-function InboxView({ inbox, setInbox, onMatch }) { return <main className="simple-page inbox-page"><div className="page-topline"><div><span className="eyebrow">Inbox</span><h1>People looking for a table.</h1></div><span className="count-badge">{inbox.length} pending</span></div><p className="lede">Requests expire after three minutes so no one waits around.</p>{inbox.length ? <div className="request-list">{inbox.map((request) => <article className="request-card" key={request.id}><div className="request-avatar">{request.name[0]}</div><div className="request-content"><span className="request-time"><Clock3 size={13} /> expires in {request.expires}</span><h2>{request.name} is studying {request.course}</h2><p>They’re at {request.table} and would like to find a focused seat nearby.</p><div className="request-actions"><button className="primary-button small" onClick={() => onMatch(request)}><Check size={14} /> Accept</button><button className="quiet-button" onClick={() => setInbox(inbox.filter((item) => item.id !== request.id))}>Not now</button><button className="icon-button" aria-label="Mute request"><Bell size={15} /></button></div></div></article>)}</div> : <div className="empty-state"><MessageCircle size={25} /><strong>No requests right now.</strong><span>Keep this tab open while you study.</span></div>}</main> }
+function HostView({ user, host, hostOpen, topic, seatId, onLogin, onToggleHost, onLinkSeat, onEditTopic, onMute, onConfirm }) {
+  if (!user) return <main className="simple-page host-page"><span className="eyebrow">Host mode</span><h1>Make your seat easier<br /><em>to find.</em></h1><div className="empty-state"><UserRound size={25} /><strong>Log in to become a host.</strong><span>Your identity stays private until you accept a request.</span><button className="primary-button" onClick={onLogin}>Log in <ArrowUpRight size={15} /></button></div></main>
+  const state = host ? (host.status === 'findable' ? 'findable' : host.hidden_reason) : null
+  const [badge, title, detail] = state ? hostStatusText[state] || hostStatusText.needs_topic : ['Off', hostOpen ? 'Set up your seat.' : 'You are off the map.', hostOpen ? 'Link the seat you’re sitting at, then add a topic.' : 'Turn on host mode when you’re ready.']
+  return <main className="simple-page host-page"><span className="eyebrow">Host mode</span><h1>Make your seat easier<br /><em>to find.</em></h1><p className="lede">Let one person studying something similar join you. You’re always in control.</p>
+    <div className="host-card"><div className="host-card-top"><div><span className="status-badge"><span className={state === 'findable' ? 'on' : ''} />{badge}</span><h2>{title}</h2><p>{detail}</p></div><button className={`toggle ${hostOpen ? 'on' : ''}`} onClick={() => onToggleHost(!hostOpen)} aria-label="Toggle host mode"><span /></button></div>
+      {hostOpen && <div className="host-steps">
+        <div className={host ? 'host-step complete' : 'host-step'}><span>{host ? <Check size={15} /> : '1'}</span><div><strong>Link your seat</strong><small>{host ? `Seat ${host.seat_id}` : `Sit at your seat, then link it (${seatId})`}</small></div>{!host && <button className="text-button" onClick={() => onLinkSeat(seatId)}>Link seat <ArrowUpRight size={14} /></button>}</div>
+        <div className={host?.label ? 'host-step complete' : 'host-step'}><span>{host?.label ? <Check size={15} /> : '2'}</span><div><strong>Choose a topic</strong><small>{host?.label || topic || 'Add what you’re studying today'}</small></div><button className="text-button" onClick={onEditTopic}>Edit <ArrowUpRight size={14} /></button></div>
+        {host && <div className="host-step"><span>3</span><div><strong>{host.muted ? 'Requests muted' : 'Taking requests'}</strong><small>{state === 'confirm_pending' ? 'Confirm you’re still here' : 'Mute anytime'}</small></div>{state === 'confirm_pending' ? <button className="text-button" onClick={onConfirm}>Confirm <Check size={14} /></button> : <button className="text-button" onClick={() => onMute(!host.muted)}>{host.muted ? 'Unmute' : 'Mute'}</button>}</div>}
+      </div>}
+    </div></main>
+}
 
-function MatchView({ match, onBack, onDone }) { if (!match) return null; return <main className="match-page"><button className="back-button" onClick={onBack}>← Back to map</button><div className="match-intro"><span className="eyebrow"><span className="live-dot" /> You found a match</span><h1>Make the first hello<br /><em>feel easy.</em></h1><p>Your table is waiting at PCL Library.</p></div><div className="match-card"><div className="match-card-head"><span className="match-spark"><Sparkles size={18} /></span><span>Ghost Seats introduction</span><span className="match-time">Just now</span></div><div className="match-person"><div className="large-avatar">{match.name[0]}</div><div><span>Say hello to</span><h2>{match.name}</h2><p>Studying {match.topic}</p></div></div><div className="match-details"><div><MapPin size={16} /><span><small>Meet at</small><strong>{match.building} · Floor 2 · Seat {match.seat}</strong></span></div><div><MessageCircle size={16} /><span><small>Try this opener</small><strong>{match.icebreaker}</strong></span></div></div><div className="match-actions"><button className="primary-button" onClick={onDone}><Check size={16} /> I’m here</button><button className="quiet-button" onClick={onDone}>Cancel match</button><button className="report-button">Block or report</button></div></div></main> }
+function InboxView({ inbox, hosting, onAnswer }) { return <main className="simple-page inbox-page"><div className="page-topline"><div><span className="eyebrow">Inbox</span><h1>People looking for a table.</h1></div><span className="count-badge">{inbox.length} pending</span></div><p className="lede">You’ll see their course and table only. Names appear after you accept.</p>{inbox.length ? <div className="request-list">{inbox.map((request) => <article className="request-card" key={request.request_id}><div className="request-avatar">?</div><div className="request-content"><span className="request-time"><Clock3 size={13} /> {request.seconds_left}s left</span><h2>Someone studying {request.course_label}</h2><p>Wants to join you at {request.table_label}.</p><div className="request-actions"><button className="primary-button small" onClick={() => onAnswer(request.request_id, 'accept')}><Check size={14} /> Accept</button><button className="quiet-button" onClick={() => onAnswer(request.request_id, 'decline')}>Not now</button><button className="icon-button" aria-label="Decline and mute requests" title="Decline and mute" onClick={() => onAnswer(request.request_id, 'mute')}><Bell size={15} /></button></div></div></article>)}</div> : <div className="empty-state"><MessageCircle size={25} /><strong>No requests right now.</strong><span>{hosting ? 'Keep this tab open while you study.' : 'Turn on host mode to receive requests.'}</span></div>}</main> }
+
+const matchEndText = { completed: 'You’re all set. Enjoy studying!', cancelled: 'This match was cancelled.', expired: 'This match expired.' }
+
+function MatchView({ match, onBack, onAction }) {
+  if (!match) return <main className="match-page"><p className="lede">Loading your match…</p></main>
+  const seat = match.alt_seat_id || match.assigned_seat_id
+  const active = match.status === 'active'
+  return <main className="match-page"><button className="back-button" onClick={onBack}>← Back to map</button><div className="match-intro"><span className="eyebrow"><span className="live-dot" /> {active ? 'You found a match' : 'Match ended'}</span><h1>Make the first hello<br /><em>feel easy.</em></h1><p>{active ? `Your table is waiting at ${match.building}.` : matchEndText[match.status]}</p></div>
+    <div className="match-card"><div className="match-card-head"><span className="match-spark"><Sparkles size={18} /></span><span>Ghost Seats introduction</span><span className="match-time">{match.role === 'host' ? 'They’re coming to you' : 'You’re heading over'}</span></div>
+      <div className="match-person"><div className="large-avatar">{match.other_first_name[0]}</div><div><span>Say hello to</span><h2>{match.other_first_name}</h2></div></div>
+      <div className="match-details"><div><MapPin size={16} /><span><small>{match.alt_seat_id ? 'Your seat was taken; meet at' : 'Meet at'}</small><strong>{match.building} · Floor {match.floor} · {match.table_label}{seat ? ` · Seat ${seat}` : ''}</strong></span></div><div><MessageCircle size={16} /><span><small>Try this opener</small><strong>{match.icebreaker}</strong></span></div></div>
+      {active && <div className="match-actions">{match.role === 'seeker' && <button className="primary-button" onClick={() => onAction('arrived')}><Check size={16} /> I’m here</button>}<button className="quiet-button" onClick={() => onAction('cancel')}>Cancel match</button></div>}
+    </div></main>
+}
 
 function Modal({ title, onClose, children }) { return <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()}><div className="modal"><button className="modal-close icon-button" onClick={onClose} aria-label="Close"><X size={18} /></button><span className="eyebrow">Ghost Seats</span><h2>{title}</h2>{children}</div></div> }
 
