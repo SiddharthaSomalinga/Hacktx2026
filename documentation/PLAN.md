@@ -47,7 +47,7 @@ Tracks: Best Hardware · Meta (Bringing People Closer Together with AI) · MLH B
 
 ## Current milestone
 
-Backend B0–B5 built and verified locally on Postgres + TimescaleDB (PROGRESS, Session 3). Open backend steps wait on other roles or unknowns: hardware handoff (H0), deploy (D36: Vultr setup), Muse (U1), and the integration checkpoints IC1–IC3 with the frontend.
+Backend B0–B5 built and verified locally on Postgres + TimescaleDB (PROGRESS, Session 3). Open backend steps wait on other roles or unknowns: hardware handoff (H0), deploy (D36: Vultr setup), and the integration checkpoints IC1–IC3 with the frontend.
 
 ## Backend checklist — Manideep (`v1backend`)
 
@@ -267,7 +267,7 @@ REQUIREMENTS §11, plus WebSockets (FR-10 specifies polling).
 | Q11 | FR-27 confirmation endpoint and grace | Team | B3.3 | Resolved: D24 |
 | Q12 | History chart window and raw retention | Team | B2.3 | Resolved: 24 h, 30 days (hourly rollup kept) |
 | Q13 | On accept, the host's table has no open seat at that instant | Team | B4.1 | Resolved: nearest open seat on the floor; none → no assigned seat |
-| U1 | Muse Spark and Muse Image access (key, endpoint, auth, JSON mode) | Backend, from Meta sponsors | B4.7, F4.3 | **Open** |
+| U1 | Muse Spark and Muse Image access (key, endpoint, auth, JSON mode) | Backend, from Meta sponsors | B4.7, F4.3 | Resolved: key obtained; API per D38. `muse-image-1.0` is on the same API (F4.3) |
 | U2 | Tiger Data: connection limit (sets `DB_POOL_SIZE`) | Backend | Deploy | Resolved: `max_connections` 105 (12 reserved); 2 hosts × 2 workers × 5 = 20, so `DB_POOL_SIZE` stays 5 |
 | U3 | Deploy host (always-on, HTTPS, env vars, ≥ 2 instances) | Backend | B2.4 | Resolved: D36, D37 |
 
@@ -478,3 +478,16 @@ Fly.io, AWS (App Runner, ECS Fargate, EC2), Vultr; the team chose Vultr.
 **D37 — Public URL on a `.tech` domain, DNS on Vultr.** Vultr's Auto SSL only works for domains
 whose DNS Vultr hosts, so the domain's nameservers point at Vultr. The printed QR codes and the
 Pi bridge use this URL, so it is fixed before `make qr` runs.
+
+**D38 — Muse Spark through Meta's Model API (resolves U1).** From Meta's documentation
+(`dev.meta.ai/docs`):
+- **Protocol:** `POST {MUSE_BASE_URL}/chat/completions`, OpenAI-compatible, `Authorization:
+  Bearer`. Defaults `https://api.meta.ai/v1` and `muse-spark-1.3`, both settings (§8), so a
+  model or provider change needs no code.
+- **Structured output:** every call sends a strict `json_schema`. Course codes and subjects
+  are enums from the catalog, so the model cannot invent a course. A course the catalog lacks
+  comes back as `NONE`, and the regex fallback supplies the code.
+- **Latency:** `reasoning_effort: "minimal"`, the lowest Spark accepts. No retries inside the
+  `AI_TIMEOUT_S` budget: any error, 429 or timeout goes straight to the fallback (NFR-3).
+- **Privacy:** prompts carry topic and about-me text only, and host ids are replaced by
+  `h1…hN` (REQUIREMENTS §9). User text is passed as JSON data, never as instructions.
