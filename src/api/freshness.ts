@@ -35,17 +35,18 @@ export function ageText(ms: number): string {
   return `${Math.round(m / 60)} h ago`
 }
 
-export function freshnessText(f: Freshness): string {
+/** A short label that always fits, and the detail shown when there is room. */
+export function freshnessText(f: Freshness): { label: string; detail: string } {
   switch (f.kind) {
     case 'loading':
-      return 'Connecting…'
+      return { label: 'Connecting…', detail: '' }
     case 'live':
-      return 'Live'
+      return { label: 'Live', detail: '' }
     case 'aging':
-      return `Updated ${ageText(f.ageMs)}`
+      return { label: `Updated ${ageText(f.ageMs)}`, detail: '' }
     case 'stale':
-      return `Unable to refresh · updated ${ageText(f.ageMs)}`
+      return { label: 'Unable to refresh', detail: ` · updated ${ageText(f.ageMs)}` }
     case 'offline':
-      return f.ageMs === null ? 'Offline' : `Offline · data from ${ageText(f.ageMs)}`
+      return { label: 'Offline', detail: f.ageMs === null ? '' : ` · data from ${ageText(f.ageMs)}` }
   }
 }

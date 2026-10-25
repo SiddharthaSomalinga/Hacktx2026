@@ -40,10 +40,12 @@ function FreshnessPill() {
     online,
     now,
   })
+  const text = freshnessText(state)
   return (
     <span className={`${styles.pill} ${styles[state.kind]}`} role="status">
       <span className={styles.dot} aria-hidden />
-      {freshnessText(state)}
+      {text.label}
+      {text.detail && <span className={styles.detail}>{text.detail}</span>}
     </span>
   )
 }

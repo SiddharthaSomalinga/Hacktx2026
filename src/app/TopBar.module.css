@@ -44,6 +44,7 @@
   font-size: var(--t-xs);
   font-weight: var(--w-medium);
   letter-spacing: 0.02em;
+  white-space: nowrap;
 }
 
 .wordmark svg {
@@ -146,6 +147,15 @@
 @media (max-width: 420px) {
   .settings {
     display: none;
+  }
+
+  /* Keep the detail for screen readers when there is no room to show it. */
+  .detail {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
   }
 }
 
