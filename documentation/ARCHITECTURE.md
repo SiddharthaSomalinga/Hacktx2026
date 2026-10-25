@@ -42,16 +42,17 @@ is the node's local fallback (HW-5).
 ├── documentation/             # REQUIREMENTS · USER_FLOWS · ARCHITECTURE · PLAN · PROGRESS
 ├── backend/                   # FastAPI service (backend role, v1backend)
 │   ├── app/
-│   │   ├── main.py            # create_app(settings, repo, ai, notifier, clock); static mount of frontend/dist
+│   │   ├── main.py            # create_app(settings, services); static mount of frontend/dist
 │   │   ├── config.py          # every key in REQUIREMENTS §8; validated at startup (fail fast)
-│   │   ├── worker.py          # scheduler tick + outbox sender (an asyncio task per instance)
+│   │   ├── wiring.py          # builds the real adapters from config
+│   │   ├── worker.py          # scheduler tick + outbox sender (a thread per instance)
 │   │   ├── domain/            # pure logic, no I/O (§3)
-│   │   ├── services/          # use cases; own transactions; ports.py
-│   │   ├── adapters/          # repo_postgres, ai_fallback, ai_muse, push_webpush, db, clock
+│   │   ├── services/          # use cases, lifecycle coordinator, ports.py, facts.py
+│   │   ├── adapters/          # repo_postgres, history_sql, ai_fallback, push_webpush, db, clock
 │   │   └── interface/         # schemas.py (the contract), deps.py, errors.py, routes/
 │   ├── sql/                   # schema.sql, seed.sql
-│   ├── scripts/               # fake_node.py, seed_history.py, seat_qr.py, load_check.py
-│   ├── tests/                 # domain/, services/, repo_contract/, api/, fakes.py
+│   ├── scripts/               # db, fake_node, seed_history, seat_qr, vapid_keys, load_check
+│   ├── tests/                 # domain/, api/, repo_contract/, fakes.py (in-memory repository)
 │   └── pyproject.toml · uv.lock · Makefile · .env.example · .gitignore
 ├── bridge/                    # Pi serial ⇄ HTTPS (hardware role)
 ├── firmware/                  # Arduino sketch (hardware role)
@@ -78,6 +79,10 @@ and an import-guard test enforces that.
 | `domain/topic_rules.py` | Fallback normalizer, fallback icebreaker, `card_key_for` | §9 |
 | `domain/notifications.py` | Which transition emits which outbox `kind` and payload (no names before accept) | FR-52, 53 |
 | `services/ports.py` | `Repository`, `TopicAI`, `Notifier`, `Clock` protocols | — |
+| `services/lifecycle.py` | Applies `advance_*` decisions under row locks; the one place where host, search and match transitions trigger each other | NFR-2, D29 |
+| `services/facts.py` | Per-transaction snapshot answering "what state is this seat" and "is this host findable", identically for every service | FR-24 |
+| `services/ai_guard.py` | Wraps any `TopicAI`: an exception or out-of-bounds output becomes the deterministic fallback | NFR-3 |
+| `services/topics.py` | `topic_cache` in front of `normalize_topic` | §9 |
 | `services/*.py` | `readings`, `map`, `history`, `auth`, `host`, `search`, `requests`, `match`, `safety`, `push`, `scheduler` | — |
 | `adapters/repo_postgres.py` | All SQL, parameterized only | — |
 | `adapters/ai_fallback.py`, `ai_muse.py` | `TopicAI` implementations (§8) | NFR-3 |
