@@ -109,7 +109,7 @@ commit when green.
 4. ✅ Seeded simulated host sessions (FR-48), verified never to receive requests.
 5. ✅ *(Optional, FR-54)* search pinned to `related`.
 6. ⬜ **IC3.**
-7. ⬜ *(Blocked on U1.)* `MuseAI` once U1 is resolved, then the Muse-off test: with a bad key the same flows complete on fallbacks.
+7. ✅ `MuseAI` (D38), live-checked with `make muse-check`; Muse-off: a bad key → 401, and the guard answers with the fallback.
 
 ### B4.5 — Push, scheduler, outbox (ARCH §14; D28–D30)
 1. ✅ Tables `push_subscriptions`, `notification_outbox`; `Notifier` port, `push_webpush` adapter, `FakeNotifier`.

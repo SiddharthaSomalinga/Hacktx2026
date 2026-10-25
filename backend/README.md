@@ -123,7 +123,7 @@ make check                # ruff, mypy --strict, unit + in-memory tests
 make test-db              # + Postgres tests against ghostseats_test (truncated each test)
 ```
 
-177 tests pass with Postgres (150 pass and 27 are skipped without it). They cover:
+201 tests pass with Postgres (174 pass and 27 are skipped without it). They cover:
 
 - **Seat engine.** Each threshold at its exact boundary.
 - **User flows.** Both flows end to end over HTTP, with a simulated node posting every 2 s.
@@ -210,8 +210,11 @@ make deploy HOSTS="root@<ip-1> root@<ip-2>" REF=origin/v1
 
 - **Demo login.** Anyone can log in as any demo user (NFR-7). Swapping in SSO touches only the
   auth service and the `current_user` dependency.
-- **No Muse Spark yet.** Topic cleanup, ranking and icebreakers come from the rule-based
-  fallback (course-code regex, keyword overlap, template icebreaker) until API access exists.
+- **Muse is on the request path.** With `MUSE_API_KEY` set, topic cleanup, ranking and the
+  icebreaker call Muse Spark (D38). Live calls took 1.3–2.5 s against the 4 s `AI_TIMEOUT_S`;
+  the first is slowest because it opens the TLS connection. A slower or failed call is answered
+  by the rule-based fallback, so a seeker can wait up to 4 s for a worse answer. Topics are
+  cached, so each distinct topic text is sent once.
 - **Push is at-least-once.** The sender pushes inside the transaction that marks the row sent;
   if a process dies between the push and the commit, the notification is sent again.
 - **Timer lag.** A timer fires up to `SCHEDULER_TICK_S` (2 s) late when nobody polls, and the
