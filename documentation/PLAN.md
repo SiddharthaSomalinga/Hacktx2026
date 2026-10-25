@@ -17,7 +17,7 @@ Who builds what, in what order, and why. Requirement ids refer to
 |---|---|---|---|
 | Backend | Manideep | `backend/`, `documentation/` | `v1backend` |
 | Frontend | Software partner | The web app and PWA (`frontend/` after D6) | `v1frontend` |
-| Hardware | Hardware pair | `firmware/`, `bridge/`, the physical demo table | `Arduino/Transmitter-Code`, `v1hardsoft` |
+| Hardware | Hardware pair | `firmware/`, `bridge/`, the physical demo table | `Arduino/Transmitter-Code`; UI and bridge work went to `v1hardsoft`, now `v1final` |
 
 No two roles edit the same folder. The contract between them is REQUIREMENTS
 §7 (API) and §10.3 (serial). A change to either is agreed by the roles it
@@ -255,7 +255,7 @@ REQUIREMENTS §11, plus WebSockets (FR-10 specifies polling).
 | Id | Question | Owner | Blocks | Status |
 |---|---|---|---|---|
 | Q1 | Can a join request reach a simulated host? | Team | B4.4 | Resolved: D22 |
-| Q2 | Hardware branch name; demo-table node and seat ids | Hardware pair | B0.7, H0 | Resolved: branches `Arduino/Transmitter-Code` and `v1hardsoft`; the bridge uses the placeholder ids `table-1` / `t1-s1` |
+| Q2 | Hardware branch name; demo-table node and seat ids | Hardware pair | B0.7, H0 | Resolved: branches `Arduino/Transmitter-Code` and `v1hardsoft` (renamed `v1final` on GitHub); the bridge uses the placeholder ids `table-1` / `t1-s1` |
 | Q4 | What does turning on host mode do before linking? | Team | B3.3 | Resolved: D17 |
 | Q5 | "Seat empty" vs "no person" for ending sessions and matches | Team | B3.3, B4.2 | Resolved: D18 |
 | Q6 | Mute from a request card | Team | B3.5 | Resolved: D20 |
