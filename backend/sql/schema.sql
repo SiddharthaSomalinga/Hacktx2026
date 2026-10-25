@@ -205,3 +205,103 @@ CREATE TABLE IF NOT EXISTS notification_outbox (
   attempts    integer NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS notification_outbox_unsent ON notification_outbox (id) WHERE sent_at IS NULL;
+
+-- History (FR-49, D31, D33) ------------------------------------------------------
+
+-- Hourly average open seats for one building over [p_since, p_until), from change-only
+-- readings. The API and the rollup job both call this, so they cannot disagree.
+CREATE OR REPLACE FUNCTION open_hourly(
+  p_building text, p_since timestamptz, p_until timestamptz, p_offline interval
+) RETURNS TABLE (hour timestamptz, open_avg double precision)
+LANGUAGE sql STABLE AS $fn$
+
+WITH seats_b AS (
+  SELECT s.id, ss.last_seen
+  FROM seats s
+  JOIN tables t ON t.id = s.table_id
+  LEFT JOIN seat_state ss ON ss.seat_id = s.id
+  WHERE t.building_id = p_building
+),
+rows_in AS (
+  -- the row in force at the start of the window, per seat ...
+  SELECT x.seat_id, x.time, x.online, x.object_present, x.human_present
+  FROM seats_b sb
+  CROSS JOIN LATERAL (
+    SELECT r.seat_id, r.time, r.online, r.object_present, r.human_present
+    FROM seat_readings r
+    WHERE r.seat_id = sb.id AND r.time <= p_since
+    ORDER BY r.time DESC
+    LIMIT 1
+  ) x
+  UNION ALL
+  -- ... and every change inside the window
+  SELECT r.seat_id, r.time, r.online, r.object_present, r.human_present
+  FROM seat_readings r
+  WHERE r.seat_id IN (SELECT id FROM seats_b)
+    AND r.time > p_since AND r.time < p_until
+),
+all_intervals AS (
+  -- lead() must see every row: a WHERE here would run before the window function and let an
+  -- open interval run past the change that ended it.
+  SELECT
+    i.online AND NOT i.object_present AND NOT i.human_present AS is_open,
+    greatest(i.time, p_since) AS start_at,
+    least(
+      coalesce(lead(i.time) OVER (PARTITION BY i.seat_id ORDER BY i.time), p_until),
+      coalesce(sb.last_seen + p_offline, p_until),
+      p_until
+    ) AS stop_at
+  FROM rows_in i
+  JOIN seats_b sb ON sb.id = i.seat_id
+),
+intervals AS (
+  SELECT start_at, stop_at FROM all_intervals WHERE is_open
+),
+hours AS (
+  SELECT h AS hour_at, least(h + interval '1 hour', p_until) AS hour_end
+  FROM generate_series(p_since, p_until - interval '1 microsecond',
+                       interval '1 hour') AS h
+)
+-- FILTER: Postgres LEAST/GREATEST skip NULLs, so an hour with no interval (NULLs from the
+-- LEFT JOIN) would otherwise count as fully open.
+SELECT
+  hours.hour_at AS hour,
+  (coalesce(sum(extract(epoch FROM least(iv.stop_at, hours.hour_end)
+                                   - greatest(iv.start_at, hours.hour_at)))
+              FILTER (WHERE iv.start_at IS NOT NULL), 0)
+     / extract(epoch FROM hours.hour_end - hours.hour_at))::double precision AS open_avg
+FROM hours
+LEFT JOIN intervals iv
+  ON iv.stop_at > hours.hour_at AND iv.start_at < hours.hour_end AND iv.stop_at > iv.start_at
+GROUP BY hours.hour_at, hours.hour_end
+ORDER BY hours.hour_at
+$fn$;
+
+-- Completed hours, kept after raw readings age out (Q12: raw 30 days, hourly kept).
+CREATE TABLE IF NOT EXISTS building_open_hourly (
+  building_id  text NOT NULL REFERENCES buildings(id),
+  hour         timestamptz NOT NULL,
+  open_avg     double precision NOT NULL,
+  PRIMARY KEY (building_id, hour)
+);
+
+-- Timescale job: roll up every completed hour not yet stored. Idempotent.
+CREATE OR REPLACE PROCEDURE rollup_open_hourly(job_id int, config jsonb)
+LANGUAGE plpgsql AS $proc$
+DECLARE
+  b record;
+  offline interval := make_interval(secs => coalesce((config->>'offline_s')::int, 30));
+  horizon timestamptz := date_trunc('hour', now());
+  since timestamptz;
+BEGIN
+  FOR b IN SELECT id FROM buildings LOOP
+    SELECT coalesce(max(hour) + interval '1 hour', horizon - interval '24 hours')
+      INTO since FROM building_open_hourly WHERE building_id = b.id;
+    IF since < horizon THEN
+      INSERT INTO building_open_hourly (building_id, hour, open_avg)
+      SELECT b.id, h.hour, h.open_avg FROM open_hourly(b.id, since, horizon, offline) h
+      ON CONFLICT DO NOTHING;
+    END IF;
+  END LOOP;
+END
+$proc$;

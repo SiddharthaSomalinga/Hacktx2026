@@ -32,12 +32,11 @@ def apply(path: Path) -> None:
 
 def policies() -> None:
     from app.adapters.history_sql import policy_statements
-
     from app.config import get_settings
 
     settings = get_settings()
     with psycopg.connect(_url(), autocommit=True) as conn:
-        for statement in policy_statements(settings.readings_retention_days):
+        for statement in policy_statements(settings.readings_retention_days, settings.offline_s):
             conn.execute(statement.encode())
     print("policies applied")
 
