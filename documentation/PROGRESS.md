@@ -280,7 +280,8 @@ Caught before committing:
 ### Found on GitHub
 - **`v1`** (`a145f6b`): the partner merged an older `v1backend` (`1b0d6f6`) into
   `v1frontend` and wired the app to the API (`src/api.js`, a Vite `/api` proxy).
-- **`v1hardsoft`** (`16f573f`, hardware pair): UI LED colors, a `DATABASE_URL=memory` mode in
+- **`v1hardsoft`** (`16f573f`, hardware pair; then `32680ba`, the UT color theme, by the partner):
+  UI LED colors, a `DATABASE_URL=memory` mode in
   `backend/app/wiring.py`, and `backend/scripts/arduino_bridge.py` with a node key in the code.
 - **`Arduino/Transmitter-Code`** (`384c530`): `HACKATHON.ino`, one IR sensor on D2, printing
   `occupied: true|false` every 50 ms and driving its own LEDs. Also a Web Bluetooth component
@@ -326,6 +327,13 @@ Caught before committing:
 - **Found while replaying (Q14b):** with only `t1-s1` reporting, the host is hidden as
   `table_full`; it becomes findable only once `t1-s2` reports open. The backend behaves as
   FR-24 requires; the real table needs a second sensed seat.
+
+### Pushed
+- **During the merge, `v1hardsoft` was renamed `v1final` on GitHub** (head `32680ba`). That
+  commit was already in the verified tree.
+- The local `v1final` contains `origin/v1final`, so the push was a fast-forward.
+- `32680ba` carries a `Co-authored-by: Copilot` trailer. It is a teammate's commit, already
+  public; history was not rewritten.
 
 ### Not verified
 - The frontend in a browser against this backend (only its API calls were replayed).
