@@ -20,6 +20,7 @@ Decision numbers refer to `PLAN.md`, decision log.
 - **New:** FR-50 one role at a time (D23) · FR-51–FR-53 push notifications (D28, D30) · FR-54 optional related-subject retry (D19).
 - **NFR-2** Timeouts are evaluated on read/write, on sensor ingest and by one scheduler tick (D29). **NFR-4** Installable PWA (D28). **New NFR-8** horizontal scale (D32).
 - **Found during the build (v1.1, same release):** `label`, `searches.joined_at`, `host_sessions.confirm_notified_at` (§6); `table_not_found`, `seat_taken`, `database_unavailable` (§7); `PUSH_MAX_ATTEMPTS`, `FRONTEND_DIST`, `COOKIE_SECURE`, `WORKER_ENABLED`, `DB_POOL_SIZE` (§8); Q12 values 24 h / 30 days.
+- **§8 (D38)** `MUSE_BASE_URL`, `MUSE_MODEL`.
 - **§6** Adds `buildings.lat/lng`, `keywords`, `offered_group`, change-only `seat_readings` with offline markers, `push_subscriptions` and `notification_outbox`. **§7** New and changed endpoints, node key, error codes. **§8** New keys and an environment table.
 
 # 1. Overview
@@ -316,6 +317,8 @@ JSON over HTTPS. Errors: `{"error": "<code>", "message": "<sentence>"}` with a 4
 | SECRET_KEY | Yes | Session cookie signing |
 | NODE_KEY | Yes | Shared key the bridge sends as `X-Node-Key` |
 | MUSE_API_KEY | No | AI provider key; without it, fallbacks are used |
+| MUSE_BASE_URL | No | AI provider base URL (default `https://api.meta.ai/v1`, D38) |
+| MUSE_MODEL | No | AI model id (default `muse-spark-1.3`, D38) |
 | VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT | Yes | Web push |
 | FRONTEND_DIST | No | Built frontend folder to serve from the same origin (D5) |
 | COOKIE_SECURE | No | `true` in production (HTTPS-only session cookie) |
