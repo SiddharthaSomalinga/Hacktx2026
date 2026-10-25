@@ -21,7 +21,7 @@ function Wordmark() {
         <rect x="3" y="5" width="16" height="13" rx="4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeDasharray="3.2 2.4" />
         <rect x="6" y="1.5" width="10" height="2.4" rx="1.2" fill="currentColor" />
       </svg>
-      <span>ghost seats</span>
+      <span>synapse</span>
     </span>
   )
 }
@@ -122,7 +122,7 @@ export function TopBar() {
             <ArrowLeft size={20} aria-hidden />
           </IconButton>
         )}
-        <button type="button" className={styles.home} onClick={() => navigate(paths.home())} aria-label="Ghost Seats, campus map">
+        <button type="button" className={styles.home} onClick={() => navigate(paths.home())} aria-label="Synapse, campus map">
           <Wordmark />
         </button>
       </div>

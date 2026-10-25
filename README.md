@@ -1,4 +1,4 @@
-# Ghost Seats
+# Synapse
 
 Seat sensors in UT Austin libraries tell a seat held by a backpack with nobody in it ("ghosted",
 shown as *likely opening*) from one that is taken or free. The web app shows every seat live on

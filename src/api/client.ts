@@ -57,7 +57,7 @@ export async function api<T>(method: Method, path: string, body?: unknown, { rev
       body: body === undefined ? undefined : JSON.stringify(body),
     })
   } catch {
-    throw new ApiError(0, 'network', "Can't reach Ghost Seats")
+    throw new ApiError(0, 'network', "Can't reach Synapse")
   }
 
   if (response.status === 304 && cached) return cached.data as T

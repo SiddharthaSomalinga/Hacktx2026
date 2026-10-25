@@ -35,7 +35,7 @@ self.addEventListener('notificationclick', (event) => {
   const url = (event.notification.data as { url?: string } | null)?.url ?? '/'
   event.waitUntil(
     (async () => {
-      // Reuse an open Ghost Seats window if there is one; open a new one otherwise.
+      // Reuse an open Synapse window if there is one; open a new one otherwise.
       const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
       const open = windows.find((w) => new URL(w.url).origin === self.location.origin)
       if (open) {

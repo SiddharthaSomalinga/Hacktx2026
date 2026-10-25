@@ -19,7 +19,7 @@ const CSP = [
 
 function contentSecurityPolicy(): Plugin {
   return {
-    name: 'ghost-seats-csp',
+    name: 'synapse-csp',
     apply: 'build',
     transformIndexHtml: () => [
       { tag: 'meta', attrs: { 'http-equiv': 'Content-Security-Policy', content: CSP }, injectTo: 'head-prepend' },
