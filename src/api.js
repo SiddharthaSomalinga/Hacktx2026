@@ -26,6 +26,7 @@ const normalizeBuilding = (building) => ({
 
 export const api = {
   me: () => request('/me'),
+  demoUsers: () => request('/demo-users'),
   login: (user) => request('/login', { method: 'POST', body: JSON.stringify(user) }),
   logout: () => request('/logout', { method: 'POST' }),
   buildings: async () => (await request('/buildings')).map(normalizeBuilding),
