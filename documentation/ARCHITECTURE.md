@@ -286,7 +286,7 @@ class TopicAI(Protocol):                     # services/ports.py
   - `catalog.py` course codes and keyword aliases, plus a course-code regex. UT departments can contain spaces, e.g. `C S 314`.
   - Ranking by Jaccard keyword overlap.
   - The REQUIREMENTS §9 template icebreaker.
-- **`MuseAI`** wraps Muse Spark: JSON-only prompts, an `AI_TIMEOUT_S` timeout, output validated with Pydantic. Any timeout, HTTP error or invalid output → the same call on `FallbackAI`. Callers never see an AI failure.
+- **`MuseAI`** (`adapters/ai_muse.py`, D38) wraps Muse Spark over Meta's OpenAI-compatible Model API: a strict `json_schema` per call (catalog codes and subjects as enums, host ids aliased `h1…hN`), `reasoning_effort: "minimal"`, an `AI_TIMEOUT_S` timeout, no retries, replies re-validated with Pydantic. Any timeout, HTTP error or invalid output raises `MuseError`, and `GuardedAI` answers with `FallbackAI`. Callers never see an AI failure. `make muse-check` makes one live call per function.
 - `normalize_topic` results are cached in `topic_cache`, keyed by lowercased, whitespace-collapsed text.
 - **Card images** are pre-generated with Muse Image (one per subject plus a generic one; no people, no text) and shipped as static files in `frontend/public/cards/`. `card_url = /cards/<card_key>.png`.
 

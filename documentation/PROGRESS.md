@@ -4,11 +4,10 @@ Session log. Concrete changes, commands and observed results only.
 
 ## Current status
 
-- **Milestone:** backend B0–B5 built and verified locally on Postgres 16 + TimescaleDB 2.31.
-  Remaining backend steps wait on other roles or unknowns (PLAN: H0 hand-off, the D36 deploy,
-  U1 Muse, IC1–IC3).
-- **Tests:** 177 pass with Postgres (`make test-db`); 150 pass and 27 skip without it.
-- **Open questions:** Q2, U1 (PLAN). U2 and U3 resolved.
+- **Milestone:** backend B0–B5 and Muse built. Tiger Data is loaded and live. Remaining
+  steps wait on other roles or setup (PLAN: H0 hand-off, the D36 Vultr deploy, IC1–IC3).
+- **Tests:** 201 pass with Postgres (`make test-db`); 174 pass and 27 skip without it.
+- **Open questions:** Q2 (PLAN). U1, U2 and U3 resolved.
 
 ---
 
@@ -244,6 +243,32 @@ Caught before committing:
     `us-east-1`.
   - `POST /api/readings` → `{"leds":{"t1-s1":"green"}}`; a wrong node key → 401.
 
+### Muse Spark (U1, D38)
+- **Setup:** Meta's docs (`dev.meta.ai/docs`) gave the endpoint, Bearer auth, strict
+  `json_schema` output, `reasoning_effort` values (Spark rejects `"none"`) and error codes.
+- **Built:**
+  - `adapters/ai_muse.py`.
+  - `MUSE_BASE_URL` and `MUSE_MODEL` settings.
+  - Wiring: `MuseAI` when a key is set, else `FallbackAI`.
+  - `scripts/muse_check.py` (`make muse-check`).
+- **Tests:** 24 adapter tests against an `httpx.MockTransport`, plus a real local server that
+  answers after 2 s. A 0.3 s timeout cut the call off in under 1 s.
+- **Mutations, each failing its test and then restored:**
+  - the missing-host check dropped;
+  - the off-catalog course code no longer kept;
+  - the timeout ignored.
+- **`make check`:** 174 passed, 27 skipped. **`make test-db`:** 201 passed.
+- **Live, `muse-spark-1.3`:**
+
+  | Call | Latency | Result |
+  |---|---|---|
+  | `normalize_topic("orgo 1 exam prep")` | 2.52 s | CH 320M |
+  | `normalize_topic("314 trees hw")` | 1.30 s | C S 314 |
+  | `rank_hosts` | 1.78 s | 98 for the orgo host, 5 for the trees host |
+  | `icebreaker` | 1.71 s | "Want to work through Organic Chemistry I problems together for CH 320M?" |
+
+- **Wrong key:** `HTTP 401 invalid_api_key` in the log, with no key or message text.
+
 ### Not verified
 - `provision.sh` on a real Vultr instance (no systemd in the test container); the load
   balancer, Auto SSL and the `.tech` DNS.
@@ -256,4 +281,4 @@ Caught before committing:
 2. **H0:** the hardware pair's node and seat ids replace the placeholders in `sql/seed.sql`.
 3. **Deploy (D36, D37):** Vultr instances and load balancer, `.tech` DNS on Vultr. Set `DB_POOL_SIZE` against the database limit, `COOKIE_SECURE=true`,
    `FRONTEND_DIST`. Run `make policies` on Tiger Data, then `make qr ORIGIN=…`.
-4. **U1:** add the `MuseAI` adapter behind `TopicAI` once access exists.
+4. **Card images:** `muse-image-1.0` is on the same API and key (frontend F4.3).
