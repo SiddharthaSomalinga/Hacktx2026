@@ -69,3 +69,7 @@ kbd { padding: 3px 5px; color: #7b8580; border: 1px solid var(--line); font: 10p
 .menu-panel button { padding: 14px 16px; text-align: left; background: none; color: var(--ink); font-size: 15px; border-left: 3px solid transparent; }
 .menu-panel button.active { border-left-color: var(--green); font-weight: 700; }
 @media (max-width: 800px) { .menu-panel { width: 100%; } }
+.seat.offline { background: #e7e5e2; color: #8a8f93; border: 1px dashed #b8bcbf; box-shadow: none; }
+.seat-key.offline { background: #b8bcbf; }
+.brand { white-space: nowrap; }
+@media (max-width: 420px) { .profile-chip { font-size: 0; gap: 0; } .profile-chip span { font-size: 13px; } .profile-chip svg { display: none; } }
