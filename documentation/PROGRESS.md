@@ -6,7 +6,7 @@ Session log. Concrete changes, commands and observed results only.
 
 - **Milestone:** all branches integrated in `v1final` (D40) and verified locally. Remaining:
   Q14 (demo-table sensors), frontend F3, and the D36 Vultr deploy.
-- **Tests:** 201 pass with Postgres (`make test-db`); 174 pass and 27 skip without it.
+- **Tests:** 203 pass with Postgres (`make test-db`); 174 pass and 29 skip without it. Live e2e: 114/114.
 - **Open questions:** Q14 (PLAN). Q2, U1, U2 and U3 resolved.
 
 ---
@@ -338,6 +338,51 @@ Caught before committing:
 ### Not verified
 - The frontend in a browser against this backend (only its API calls were replayed).
 - The real Arduino on the bridge, and anything on Vultr.
+
+## 2026-10-25 — Session 6: full e2e on `v1final`, a hang fix, website review
+
+### End to end (`v1final` + this fix, fresh `ghostseats_e2e` database)
+- **Setup:**
+  - Live server with 2 workers and the worker thread, live Muse, short timers.
+  - Fake nodes posting every 0.5 s.
+  - An e2e-only second node with two real tables, so the cascade has more than one real host.
+- **Result: 114/114 checks passed.**
+  - Covers FR-1..54 except FR-10, FR-12 and FR-17, which are client behavior.
+  - Also covered: D30 outbox, D32 ETag, D35 outage, and hostile input.
+  - Phase B (session max 8 s, 1 request/hour) covered FR-27 confirm and FR-34 rate limit.
+- **Harness fixes, not app bugs:**
+  - FR-22 needed `HUMAN_FRESH_S` to pass after a prior person reading.
+  - `REQUEST_TIMEOUT_S=5` was shorter than live Muse ranking plus accept.
+  - FR-52: a user-initiated cancel notifies only the other side (`match.py`, by design). The
+    requirement's "(both)" reads as all participants; the canceller gets no push.
+
+### Bug: requests hung on an unresponsive database (`06cf73c` → `ab4e458`)
+- **Found:** with the database container paused, `/api/health` did not answer in 15 s.
+- **Cause:** `faulthandler` showed the thread in `repo_postgres.py:727 ping → conn.execute →
+  psycopg wait`, on a pooled connection. Nothing bounded a round trip; the pool's 5 s applied
+  only to getting a connection.
+- **Fix (D41):**
+  - `BoundedConnection.wait()` passes `DB_TIMEOUT_S` to every round trip and closes the
+    connection on a timeout.
+  - libpq `connect_timeout` bounds new connections.
+- **Regression tests:** two tests through a freezable TCP proxy. Committed first as strict
+  xfails; they failed with "still blocked after 8 s".
+- **After the fix:** each answers in about 5.0 s (three runs). The original repro returns
+  `False` in 5.0 s. `make test-db`: 203 passed.
+
+### Website review (headless Chromium, 375 px and 1280 px)
+- **No console errors, and no horizontal scroll at 375 px.**
+- **Bugs found in the frontend:**
+  - The ☰ button has no handler, and the nav and login are hidden under 800 px, so a phone
+    cannot log in, host or open history.
+  - The login map says `Maya: 'u-priya'` while the button shows Priya, so Priya logs in as
+    Alex.
+  - "Start looking" never calls `/join`.
+  - "Save topic" posts to `/host/topic` for every user, which is 409 unless linked.
+  - Host toggle on before link → 409 (D17: link creates the session).
+  - Offline seats are drawn in the "likely vacant" color.
+  - Seat tiles show raw ids.
+  - "1 floors"; PCL has 2.
 
 ## Next steps
 1. **Q14 (team):** a second sensed seat at the demo table, and a person sensor or a changed

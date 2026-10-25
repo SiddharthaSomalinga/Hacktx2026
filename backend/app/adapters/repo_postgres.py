@@ -21,7 +21,7 @@ from psycopg import Connection
 from psycopg.rows import TupleRow, dict_row
 from psycopg_pool import ConnectionPool
 
-from app.adapters.db import make_pool
+from app.adapters.db import BoundedConnection, make_pool
 from app.adapters.history_sql import HISTORY_SQL
 from app.domain.types import (
     Building,
@@ -693,10 +693,14 @@ def _unavailable_on_connection_failure() -> Iterator[None]:
 
 
 class PostgresRepository:
-    def __init__(self, url: str, read_url: str | None = None, *, pool_size: int) -> None:
-        self._primary = make_pool(url, max_size=pool_size, name="primary")
-        self._replica: ConnectionPool[Connection[TupleRow]] | None = (
-            make_pool(read_url, max_size=pool_size, name="replica") if read_url else None
+    def __init__(
+        self, url: str, read_url: str | None = None, *, pool_size: int, timeout_s: float = 5.0
+    ) -> None:
+        self._primary = make_pool(url, max_size=pool_size, timeout_s=timeout_s, name="primary")
+        self._replica: ConnectionPool[BoundedConnection] | None = (
+            make_pool(read_url, max_size=pool_size, timeout_s=timeout_s, name="replica")
+            if read_url
+            else None
         )
 
     def close(self) -> None:
