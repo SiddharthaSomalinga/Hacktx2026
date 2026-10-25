@@ -2,16 +2,25 @@
 
 from __future__ import annotations
 
-from app.domain.types import OutboxKind, OutboxMessage
+from app.domain.types import OutboxKind, OutboxMessage, User
 
 
-def request_received(host_user_id: str, course_label: str, table_label: str) -> OutboxMessage:
+def person_label(user: User) -> str:
+    """What either side may see before accept: first name and major only (D43)."""
+    return f"{user.first_name} · {user.major}" if user.major else user.first_name
+
+
+def request_received(
+    host_user_id: str, seeker: User, course_label: str, table_label: str
+) -> OutboxMessage:
     return OutboxMessage(
         host_user_id,
         OutboxKind.REQUEST_RECEIVED,
         {
             "title": "New study request",
-            "body": f"Someone studying {course_label} wants to join you at {table_label}.",
+            "body": (
+                f"{person_label(seeker)} wants to study {course_label} with you at {table_label}."
+            ),
             "url": "/host",
         },
     )

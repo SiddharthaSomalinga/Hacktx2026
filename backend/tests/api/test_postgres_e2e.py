@@ -136,7 +136,7 @@ def test_skip_locked_scheduler_ticks_do_not_collide(
     priya = Phone(app, "priya")
     sid = priya.ok("POST", "/api/search", {"topic_raw": "orgo 1"})["search_id"]
     priya.ok("POST", f"/api/search/{sid}/join")
-    clock.advance(121)  # the first request has expired; nobody polled
+    clock.advance(make_settings().request_timeout_s + 1)  # the first request expired; no polling
     node.post()
 
     barrier = threading.Barrier(6)

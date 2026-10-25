@@ -58,6 +58,7 @@ class Candidate:
     session: HostSession
     seat: Seat
     group: Group
+    major: str | None = None  # the host's major, filled in only for the AI calls (D43)
 
     @property
     def id(self) -> str:
@@ -66,15 +67,20 @@ class Candidate:
     @property
     def topic(self) -> Topic:
         s = self.session
-        return Topic(s.course_code, s.subject or "", s.keywords, s.label or "")
+        return Topic(s.course_code, s.subject or "", s.keywords, s.label or "", self.major)
 
     @property
     def about_me(self) -> str | None:
         return self.session.about_me
 
 
-def topic_of(search: Search) -> Topic:
-    return Topic(search.course_code, search.subject, search.keywords, search.label)
+def topic_of(search: Search, major: str | None = None) -> Topic:
+    return Topic(search.course_code, search.subject, search.keywords, search.label, major)
+
+
+def major_of(tx: Tx, user_id: str) -> str | None:
+    user = tx.user(user_id)
+    return user.major if user else None
 
 
 def findable_hosts(
@@ -186,7 +192,10 @@ class LifecycleService:
                 )
                 if c.group is search.offered_group and not c.seat.is_simulated
             ]
-        scores = self._ctx.ai.rank_hosts(topic_of(search), candidates)
+            # D43: Muse ranks with each side's major; names never reach the model.
+            seeker_topic = topic_of(search, major_of(tx, search.seeker_id))
+            candidates = [replace(c, major=major_of(tx, c.session.user_id)) for c in candidates]
+        scores = self._ctx.ai.rank_hosts(seeker_topic, candidates)
         ranked_ids = [s.id for s in rank((c.session for c in candidates), scores)]
 
         with self._ctx.repo.tx() as tx:
@@ -224,8 +233,14 @@ class LifecycleService:
             tx.update_search(
                 replace(search, tried_session_ids=(*search.tried_session_ids, host.id))
             )
+            seeker = tx.user(search.seeker_id)
+            assert seeker is not None
             tx.enqueue(
-                [notify.request_received(host.user_id, search.label, facts.table_of(seat).label)],
+                [
+                    notify.request_received(
+                        host.user_id, seeker, search.label, facts.table_of(seat).label
+                    )
+                ],
                 now,
             )
 

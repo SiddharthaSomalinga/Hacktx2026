@@ -164,6 +164,12 @@ class HostService:
             for request in tx.pending_requests_for_session(session.id):
                 search = tx.search(request.search_id)
                 assert search is not None
+                seeker = tx.user(search.seeker_id)
+                assert seeker is not None
                 left = max(0, int((request.expires_at - now).total_seconds()))
-                items.append(InboxItemView(request.id, search.label, table_label, left))
+                items.append(
+                    InboxItemView(
+                        request.id, seeker.first_name, seeker.major, search.label, table_label, left
+                    )
+                )
             return items

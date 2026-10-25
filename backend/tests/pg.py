@@ -31,9 +31,10 @@ INSERT INTO seats (id, table_id, node_id, position, is_simulated)
   SELECT 't2-s' || p, 't2', NULL, p, true FROM generate_series(1, 6) p;
 INSERT INTO seats (id, table_id, node_id, position, is_simulated)
   SELECT 'x1-s' || p, 'x1', NULL, p, true FROM generate_series(1, 4) p;
-INSERT INTO users (id, first_name, is_demo) VALUES
-  ('alex', 'Alex', true), ('priya', 'Priya', true), ('jordan', 'Jordan', true),
-  ('sam', 'Sam', true), ('simhost', 'Taylor', false);
+INSERT INTO users (id, first_name, is_demo, major) VALUES
+  ('alex', 'Alex', true, 'Biochemistry'), ('priya', 'Priya', true, 'Chemistry'),
+  ('jordan', 'Jordan', true, 'Computer Science'), ('sam', 'Sam', true, NULL),
+  ('simhost', 'Taylor', false, NULL);
 """
 
 

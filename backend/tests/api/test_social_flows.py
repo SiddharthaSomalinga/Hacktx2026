@@ -9,9 +9,12 @@ from app.domain.types import HostSession
 from app.services.ports import PushResult
 from tests.api.conftest import World
 from tests.api.harness import BAG, PERSON, Phone
+from tests.conftest import make_settings
 from tests.fakes import Subscription
 
 ORGO = "dying on ch 320m stereochem mechanisms"
+
+REQUEST_TIMEOUT_S = make_settings().request_timeout_s  # D42: 300
 
 
 def host_at(world: World, user: str, seat: str, topic: str = ORGO) -> Phone:
@@ -72,7 +75,11 @@ def test_demo_login_me_and_logout(world: World) -> None:
     assert anon.error("POST", "/api/login", {"user_id": "simhost"}) == (404, "unknown_user")
     assert anon.error("POST", "/api/search", {"topic_raw": "x"}) == (401, "not_logged_in")
     alex = world.phone("alex")
-    assert alex.ok("GET", "/api/me")["user"] == {"id": "alex", "first_name": "Alex"}
+    assert alex.ok("GET", "/api/me")["user"] == {
+        "id": "alex",
+        "first_name": "Alex",
+        "major": "Biochemistry",
+    }
     alex.ok("POST", "/api/logout")
     assert alex.ok("GET", "/api/me")["user"] is None
 
@@ -153,7 +160,7 @@ def test_three_hour_confirmation(make_world) -> None:  # type: ignore[no-untyped
 # --- seeker flow ---------------------------------------------------------------
 
 
-def test_same_course_counts_without_names_and_join_reaches_the_host(world: World) -> None:
+def test_search_hides_names_but_join_shows_first_name_and_major(world: World) -> None:
     alex = host_at(world, "alex", "s1")
     priya, found = seeker(world)
     assert found["label"] == "CH 320M · Organic Chemistry I"
@@ -161,8 +168,11 @@ def test_same_course_counts_without_names_and_join_reaches_the_host(world: World
     assert found["same_course"] == [{"building_id": "lib", "floor": 1, "count": 1}]
     assert "Alex" not in str(found)
     status = priya.ok("POST", f"/api/search/{found['search_id']}/join")
-    assert status["status"] == "active" and status["seconds_left"] == 120
+    assert status["status"] == "active" and status["seconds_left"] == REQUEST_TIMEOUT_S
+    # D43: before accept, each side sees the other's first name and major, nothing more.
+    assert status["asking"] == {"first_name": "Alex", "major": "Biochemistry"}
     inbox = alex.ok("GET", "/api/host/inbox")
+    assert (inbox[0]["seeker_first_name"], inbox[0]["seeker_major"]) == ("Priya", "Chemistry")
     assert inbox[0]["course_label"] == "CH 320M · Organic Chemistry I"
     assert inbox[0]["table_label"] == "Table 01"
     assert [m.message.kind for m in world.repo.data.outbox] == ["request_received"]
@@ -217,7 +227,7 @@ def test_request_expiry_moves_on_even_when_nobody_polls(world: World) -> None:
     jordan = host_at(world, "jordan", "s2")
     priya, found = seeker(world)
     priya.ok("POST", f"/api/search/{found['search_id']}/join")
-    world.node.run(120)  # nobody polls; only the node and the scheduler tick run
+    world.node.run(REQUEST_TIMEOUT_S)  # nobody polls; only the node and the scheduler tick run
     world.services.scheduler.tick()
     pending = [r for r in world.repo.data.requests.values() if r.status == "pending"]
     assert len(pending) == 1 and len(world.repo.data.requests) == 2
@@ -397,7 +407,10 @@ def test_push_delivery_retry_and_gone_subscriptions(world: World) -> None:
     assert world.services.push.drain() == 1
     endpoint, payload = world.notifier.sent[0]
     assert endpoint == "https://push/a" and payload["title"] == "New study request"
-    assert "Priya" not in str(payload)  # FR-53: no names before accept
+    # FR-53 / D43: first name and major before accept; no location beyond the host's table.
+    assert payload["body"] == (
+        "Priya · Chemistry wants to study CH 320M · Organic Chemistry I with you at Table 01."
+    )
 
     world.notifier.results["https://push/a"] = PushResult.FAILED
     world.repo.data.outbox[0].sent_at = None

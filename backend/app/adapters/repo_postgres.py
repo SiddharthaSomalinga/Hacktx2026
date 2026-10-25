@@ -311,14 +311,14 @@ class PostgresTx:
     # --- users and topics ----------------------------------------------------
 
     def user(self, user_id: str) -> User | None:
-        r = self._one("SELECT id, first_name, is_demo FROM users WHERE id = %s", (user_id,))
-        return User(r["id"], r["first_name"], r["is_demo"]) if r else None
+        r = self._one("SELECT id, first_name, is_demo, major FROM users WHERE id = %s", (user_id,))
+        return User(r["id"], r["first_name"], r["is_demo"], r["major"]) if r else None
 
     def demo_users(self) -> list[User]:
         rows = self._all(
-            "SELECT id, first_name, is_demo FROM users WHERE is_demo ORDER BY first_name"
+            "SELECT id, first_name, is_demo, major FROM users WHERE is_demo ORDER BY first_name"
         )
-        return [User(r["id"], r["first_name"], r["is_demo"]) for r in rows]
+        return [User(r["id"], r["first_name"], r["is_demo"], r["major"]) for r in rows]
 
     def cached_topic(self, key: str) -> Topic | None:
         r = self._one(

@@ -39,7 +39,7 @@ class Settings(BaseSettings):
     debounce_s: int = Field(5, ge=0)
     offline_s: int = Field(30, gt=0)
     human_fresh_s: int = Field(10, gt=0)
-    request_timeout_s: int = Field(120, gt=0)
+    request_timeout_s: int = Field(300, gt=0)  # D42
     max_hosts_per_search: int = Field(5, gt=0)
     host_end_s: int = Field(600, gt=0)
     host_leave_cancel_s: int = Field(120, gt=0)
