@@ -1,0 +1,21 @@
+"""Everything a service needs, injected once at startup."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+from app.domain.types import Timers
+from app.services.ports import Clock, Notifier, Repository, TopicAI
+
+
+@dataclass(frozen=True)
+class Context:
+    repo: Repository
+    ai: TopicAI
+    notifier: Notifier
+    clock: Clock
+    timers: Timers
+    map_cache_s: float
+    history_window_h: int
+    push_max_attempts: int
+    vapid_public_key: str
