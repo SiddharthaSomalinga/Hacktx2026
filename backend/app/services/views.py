@@ -90,7 +90,11 @@ class SearchStatusView:
     status: SearchStatus
     seconds_left: int
     match_id: str | None
-    asking: PersonView | None = None  # the host holding the pending request
+    asking: PersonView | None  # the host holding the pending request
+    request_id: str | None  # that pending request, so the seeker can block the host (D53)
+    joined: bool  # False while the search is only a preview of the results (D53)
+    label: str
+    offered_group: Group
 
 
 @dataclass(frozen=True)
@@ -110,12 +114,27 @@ class MatchView:
     other_first_name: str
     other_major: str | None
     building: str
+    building_id: str
     floor: int
+    table_id: str
     table_label: str
     assigned_seat_id: str | None
     alt_seat_id: str | None
     icebreaker: str
     card_url: str
+
+
+@dataclass(frozen=True)
+class SeatLookupView:
+    """Where a seat is, for `/seat/{seat_id}` and the QR codes (D53)."""
+
+    id: str
+    building_id: str
+    floor: int
+    table_id: str
+    table_label: str
+    position: int
+    state: PublicState
 
 
 @dataclass(frozen=True)

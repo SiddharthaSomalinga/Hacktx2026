@@ -268,9 +268,9 @@ Open: what accept does when the host's table has no open seat at that instant
 - **Nodes:** the `X-Node-Key` header is compared in constant time with `NODE_KEY` → 401 `invalid_node_key`.
 - **One role at a time (FR-50):** `already_hosting` and `already_searching` (409), enforced in the services and backed by the unique indexes in §6.
 - **Input:** Pydantic bounds every field (`topic_raw` ≤ 200 chars, `about_me` ≤ 280, `reason` ≤ 500). SQL is parameterized only.
-- **Prompt injection:** `about_me` reaches only `rank_hosts`, whose output is validated as integers 0–100. The icebreaker prompt receives topics only, and its output is capped at 140 chars. User text never reaches a prompt whose output is displayed verbatim.
+- **Prompt injection:** `about_me` reaches only `rank_hosts`, whose output is validated as integers 0–100. The icebreaker prompt receives topics and majors, never names (D43), and its output is capped at 140 chars. User text never reaches a prompt whose output is displayed verbatim.
 - **Blocks:** filtered in both directions in the candidate query; a report also inserts a block (FR-45).
-- **Names** are joined only for an accepted match (FR-43). Push payloads follow the same rule (FR-53, §14).
+- **Names:** before accept, only first name and major; location only after accept (FR-43, FR-44, D43). Push payloads follow the same rule (FR-53, §14).
 - **Logging:** method, path, status, duration; errors with context. Never logged: `NODE_KEY`, cookies, `MUSE_API_KEY`, VAPID keys, push endpoints.
 
 ## 8. AI adapter (REQUIREMENTS §9, NFR-3)
@@ -357,6 +357,8 @@ All `fetch` calls go through one `src/api.js`. It sends cookies, turns
 
 **v1.0 → v1.1:** the "Changes from v1.0" list at the top of REQUIREMENTS.
 
+**v1.1 → D53 (frontend redo):** `GET /api/seats/:id`; `/block` and `/report` accept `request_id` or `match_id` and resolve the other side server-side (`SafetyService`); `MatchOut` adds `building_id`, `table_id`; `SearchStatusOut` adds `request_id`, `joined`, `label`, `offered_group`. All additive except that `/block` and `/report` no longer require `user_id`.
+
 **Source of truth → spec (D1):**
 
 | `ghost_seats_source_of_truth.md` | REQUIREMENTS (authoritative) |
@@ -387,10 +389,10 @@ worker thread (each instance, `app/worker.py`):
 - **Transactional outbox.** The notification row commits with the transition, so a push failure never rolls back a state change and a committed transition is never missing its notification.
 - **`SKIP LOCKED`** means N instances never pick the same row. Duplicates are impossible within one outbox row.
 - **Payloads** (`domain/notifications.py`):
-  - `request_received`: course label and table label only.
+  - `request_received`: the seeker's first name and major, the course and the host's table label (D43).
   - `request_accepted`: the host's first name, allowed after accept (FR-43).
   - Never live location; never anything the matching UI wouldn't show.
-- **Client.** The service worker shows the notification. `notificationclick` opens `/host` for host events and `/match/:id` or `/search/:id` for seeker events.
+- **Client.** The service worker shows the notification. `notificationclick` focuses an open window or opens `/host` for host events and `/match/:id` or `/search/:id` for seeker events (D50).
 
 ## 15. Scale design (D31, D32, NFR-8)
 

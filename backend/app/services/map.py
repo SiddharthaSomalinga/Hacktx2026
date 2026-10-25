@@ -17,7 +17,7 @@ from app.domain.types import PublicState
 from app.services.context import Context
 from app.services.errors import not_found
 from app.services.facts import Facts
-from app.services.views import BuildingFullView, Cached, RecommendationView
+from app.services.views import BuildingFullView, Cached, RecommendationView, SeatLookupView
 
 
 def to_cached(body: object) -> Cached:
@@ -127,3 +127,21 @@ class MapService:
             kind=result.kind,
             level=result.level,
         )
+
+    def seat(self, seat_id: str) -> SeatLookupView:
+        """Where a seat is and its public state (D53), for seat links and QR codes."""
+        now = self._ctx.clock.now()
+        with self._ctx.repo.read() as tx:
+            facts = Facts(tx, now, self._ctx.timers)
+            seat = facts.seat(seat_id)
+            if seat is None:
+                raise not_found("seat_not_found", f"No seat {seat_id!r}")
+            return SeatLookupView(
+                id=seat.id,
+                building_id=seat.building_id,
+                floor=seat.floor,
+                table_id=seat.table_id,
+                table_label=facts.table_of(seat).label,
+                position=seat.position,
+                state=facts.state(seat),
+            )

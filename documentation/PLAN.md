@@ -27,11 +27,13 @@ touches, then recorded here as a decision.
 
 | Branch | Holds |
 |---|---|
-| `main` | Final, demo-ready. Receives `v1` after the IC3 rehearsal |
-| `v1` | Integration: every role's branch merges here at each checkpoint |
+| `main` | Final, demo-ready. Fast-forwarded from `v1final` (D40) |
+| `v1final` | Final integration of every role (D40); `v1hardsoft` renamed |
+| `v1` | Earlier integration (frontend + an older backend) |
 | `v1backend` | Backend and documentation |
-| `v1frontend` | Frontend |
-| hardware branch (Q2) | Firmware and bridge |
+| `v1frontend` | Frontend (v1) |
+| `v2-frontendredo` | Frontend redo, from `v1final` (D44) |
+| `Arduino/Transmitter-Code` | Firmware and bridge |
 
 ## Event schedule (context only, not a decision input)
 
@@ -165,7 +167,7 @@ commit when green.
    - Countdown while a request is pending.
 4. ⬜ Host setup in flow order: toggle → link (tap a seat or `/seat/:id`) → topic.
 5. ⬜ Host panel: findable/hidden with `hidden_reason`, mute/unmute, the 3-hour confirm prompt.
-6. ⬜ Inbox cards: course, table, countdown; Accept / Not now / Mute.
+6. ⬜ Inbox cards: seeker's first name and major, course, table, countdown; Accept / Not now / Mute (D43).
 
 ### F4 — Match (with B4)
 1. ⬜ Match view for both roles: first name, building/floor/table, assigned seat, `alt_seat_id` when set, icebreaker, card image.
@@ -175,7 +177,7 @@ commit when green.
 
 ### F4.5 — PWA and push (with B4.5)
 1. ⬜ `manifest.webmanifest`, icons, theme color.
-2. ⬜ Service worker: `push` handler, `notificationclick` → inbox or match; **never caches `/api`**.
+2. ⬜ Service worker: `push` handler, `notificationclick` focuses an open window or opens `/host`, `/match/:id` or `/search/:id`; **never caches `/api`**.
 3. ⬜ Opt-in after login: VAPID key → `PushManager.subscribe` → `POST /api/push/subscribe`; unsubscribe on logout.
 4. ⬜ iOS hint: "Add to Home Screen to get requests" (FR-51).
 
@@ -267,6 +269,12 @@ REQUIREMENTS §11, plus WebSockets (FR-10 specifies polling).
 | Q12 | History chart window and raw retention | Team | B2.3 | Resolved: 24 h, 30 days (hourly rollup kept) |
 | Q13 | On accept, the host's table has no open seat at that instant | Team | B4.1 | Resolved: nearest open seat on the floor; none → no assigned seat |
 | Q14 | The demo table has one IR proximity sensor (seat `t1-s1`). (a) The bridge sends `human_present = object_present`, so a bag reads as a person and the seat never turns `likely_opening` (D18, HW-1..6). (b) `t1-s2` never reports, so the table has no open seat and the host is hidden as `table_full` (FR-24): no seeker can join the real table. Second sensor, presence sensor, or a changed demo? | Team, hardware pair | IC1, IC2, B6 | **Open** |
+| Q15 | API gaps for the redo: block/report ids, seat lookup, match and search ids | Backend | F4, F2.3 | Resolved: D53 |
+| Q16 | FR-8 open-share denominator | Author | F1.1 | Resolved: D51 |
+| Q17 | Data-age display when polls fail | Author | F1 | Resolved: D46 |
+| Q18 | Prompt while a role is active; host toggle placement; exhausted search next step | Author | F3 | Resolved: D46, D49 |
+| Q19 | Copy for empty states, hidden reasons, recommendations and errors | Author | F3 | **Open** |
+| Q20 | Whether and when v2 replaces the frontend on `v1final` and `main` | Author, frontend partner | — | **Open** |
 | U1 | Muse Spark and Muse Image access (key, endpoint, auth, JSON mode) | Backend, from Meta sponsors | B4.7, F4.3 | Resolved: key obtained; API per D38. `muse-image-1.0` is on the same API (F4.3) |
 | U2 | Tiger Data: connection limit (sets `DB_POOL_SIZE`) | Backend | Deploy | Resolved: `max_connections` 105 (12 reserved); 2 hosts × 2 workers × 5 = 20, so `DB_POOL_SIZE` stays 5 |
 | U3 | Deploy host (always-on, HTTPS, env vars, ≥ 2 instances) | Backend | B2.4 | Resolved: D36, D37 |
@@ -540,3 +548,79 @@ per host, up to `MAX_HOSTS_PER_SEARCH` hosts.
 - **Data.** `users.major` is seeded on the demo users; there is no profile editing.
 - **Muse.** Ranking and icebreakers receive each side's major alongside the topic. Names still
   never reach the model. The fallback ignores majors.
+
+**D44 — The frontend redo lives on `v2-frontendredo`.** The author's call. The branch starts
+from `v1final`; v1 is untouched. The frontend stays at the repo root (D6 is the partner's
+call; deploy uses `FRONTEND_DIR=.`). `backend/` and `documentation/` are still edited on
+`v1backend` and merged into v2. Whether and when v2 replaces v1 on `v1final` and `main` is
+Q20.
+
+**D45 — Design language: a live floor plan.**
+- **Plan.** Fine-line drafting plan; seats are top-down chairs around tables placed by their
+  x/y. Only what the data says is drawn: no walls, no invented furniture.
+- **State by shape and color.** Open = green outline; occupied = filled red; likely opening =
+  dashed ochre outline with a bag glyph; offline = grey hatched. Colors follow FR-7, which
+  settles the seat-color item in PROGRESS. Red and green fail colorblind separation in dark
+  mode, so the shape is required, not decoration.
+- **Recommendation (FR-12).** A blue double ring, echoing the blue LED blink. Burnt orange is
+  never used in the data layer (ΔE 7.6 from occupied red); it marks primary actions only.
+- **Motion only for real loading.** Plans draw in while data loads, then each chair resolves
+  to its state; none of it under `prefers-reduced-motion`.
+
+**D46 — Map-first seeker flow; every step has a URL.** The author's call.
+- Opening the map asks "What are you studying today?" (FR-17). Typing leads straight into
+  the seeker flow on the same canvas; Skip leads to building → floor → table → recommended
+  seat. There is no separate Study tab.
+- Skip collapses the prompt to a "Studying something?" pill; it returns on the next fresh
+  open. The prompt is not shown while a search, match or host session is active.
+- Routes: `/`, `/b/:building[/:floor[/:table]]`, `/b/:building/history`, `/login`, `/find`,
+  `/search/:id`, `/seat/:seat_id`, `/seat/:seat_id/host`, `/host`, `/match/:id`.
+- **Freshness.** "Live" while the last poll succeeded and the data is under 2 × `POLL_WEB_S`
+  old; then "Updated N s ago"; after a failed poll "Unable to refresh"; offline or 503
+  "Offline · showing data from N min ago". Age is the client's last successful poll for the
+  building, never a per-seat time (FR-6). Mock data never ships.
+- An exhausted search leads to the pick flow with a recommendation, plus FR-54 when related
+  hosts exist.
+
+**D47 — Dark mode is a second palette.** It follows the system setting with a manual
+override. Text ≥ 4.5:1 and state glyphs ≥ 3:1 in both themes, enforced by tests.
+
+**D48 — A real street map on self-hosted tiles.** MapLibre, lazily loaded, with
+`setWorkerUrl` (the v1 build requested a worker file that did not exist). Tiles are a
+Protomaps extract of the UT campus served as static files with the app, with self-hosted
+glyphs and a style built from the design tokens. Building footprints are OSM shapes (ODbL)
+keyed by building id, a frontend-only field (ARCH §12). Source bounds and `maxBounds` keep
+every tile request inside the extract, because the backend answers missing files with
+`index.html`. Fallback: OpenFreeMap; without WebGL, an SVG campus plan.
+
+**D49 — Hosting starts from your chair.** Tapping a chair or scanning its QR code opens one
+seat sheet with "Open to study partners". Turning it on links the seat, then asks for the
+topic (the D17 order). The toggle shows on every chair; the server decides
+(`seat_not_occupied`). While hosting, searching or matched, a live bar stays pinned. Leaving
+the search results cancels the un-joined search, so a later link does not fail with
+`already_searching`.
+
+**D50 — Push opt-in in context.** The seeker is offered it on the waiting screen, the host
+once findable; on iOS outside the installed app, the Home Screen hint instead (FR-51). The
+subscribe body is `{endpoint, keys}` only. Re-subscribe on login; on logout, `DELETE
+/api/push/subscribe` before `POST /api/logout`. A notification click focuses an open window
+or opens `/host`, `/match/:id` or `/search/:id`.
+
+**D51 — FR-8 open share = open ÷ (total − offline).** The author's call. Grey only when every
+seat is offline, so a building is judged by the seats that report.
+
+**D52 — Frontend stack and bar.** TypeScript strict; React Router; TanStack Query (dedupe,
+pause when hidden, `If-None-Match`, backoff honoring `Retry-After`); CSS modules on design
+tokens; IBM Plex self-hosted; lucide icons only; vite-plugin-pwa with a service worker that
+never caches `/api`; Vitest, and Playwright against the real backend. Card images are
+generated once with Muse Image and committed with their prompts.
+
+**D53 — API additions for the redo.** The author's call; REQUIREMENTS §7 amended.
+- `POST /api/block` and `/api/report` take exactly one of `user_id`, `request_id` or
+  `match_id`. The server resolves the other person and checks the caller is part of that
+  request or match (FR-45 needs it: no response carried the other user's id).
+- `GET /api/seats/:seat_id` → `{id, building_id, floor, table_id, table_label, position,
+  state}`, for `/seat/:seat_id` and QR codes.
+- `MatchOut` gains `building_id` and `table_id`. `SearchStatusOut` gains `joined`, `label`,
+  `offered_group` and `request_id`, so `/search/:id` can be rebuilt after a reload.
+- No `Cache-Control` change for `index.html`; the client reloads once on a failed chunk load.
