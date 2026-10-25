@@ -31,6 +31,8 @@ class Settings(BaseSettings):
     # Connections per pool per process. Budget: processes x instances x pools x this value must
     # stay under the database's max_connections (25 in the local Timescale image).
     db_pool_size: int = Field(5, gt=0, le=50)
+    # Bounds each wait on the database: a pooled connection, connecting, every round trip (D41).
+    db_timeout_s: float = Field(5, gt=0, le=60)
 
     # Thresholds, seconds unless named otherwise.
     ghost_s: int = Field(30, gt=0)
