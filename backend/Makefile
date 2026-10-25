@@ -1,9 +1,9 @@
 .DEFAULT_GOAL := help
 RUN := uv run --frozen
 DB_CONTAINER := ghostseats-db
-LOCAL_DB := postgresql://postgres:ghostseats@localhost:5433/postgres
+LOCAL_TEST_DB := postgresql://postgres:ghostseats@localhost:5433/ghostseats_test
 
-.PHONY: help sync dev test test-db lint fmt typecheck check db-up db-down db-init seed seed-history policies fake-node qr vapid-keys load-check
+.PHONY: help sync dev test test-db lint fmt typecheck check db-up db-create db-down db-init seed seed-history policies fake-node qr vapid-keys load-check
 
 help: ## List targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-14s %s\n", $$1, $$2}'
@@ -17,8 +17,8 @@ dev: ## Run the API with reload (reads .env)
 test: ## Unit, service and in-memory contract tests
 	$(RUN) pytest
 
-test-db: ## Everything, including Postgres tests (needs TEST_DATABASE_URL)
-	TEST_DATABASE_URL=$${TEST_DATABASE_URL:-$(LOCAL_DB)} $(RUN) pytest
+test-db: ## Everything, incl. Postgres tests. Uses ghostseats_test: tests TRUNCATE every table
+	TEST_DATABASE_URL=$${TEST_DATABASE_URL:-$(LOCAL_TEST_DB)} $(RUN) pytest
 
 lint: ## Ruff lint and format check
 	$(RUN) ruff check .
@@ -36,6 +36,12 @@ check: lint typecheck test ## Lint, typecheck, test
 db-up: ## Start a local Postgres + Timescale (Toolkit included) on :5433
 	docker start $(DB_CONTAINER) 2>/dev/null || docker run -d --name $(DB_CONTAINER) -p 5433:5432 \
 		-e POSTGRES_PASSWORD=ghostseats timescale/timescaledb-ha:pg16
+
+db-create: ## Create the local ghostseats (dev) and ghostseats_test databases if missing
+	@for db in ghostseats ghostseats_test; do \
+		docker exec $(DB_CONTAINER) psql -U postgres -tAc "SELECT 1 FROM pg_database WHERE datname='$$db'" | grep -q 1 \
+		|| docker exec $(DB_CONTAINER) psql -U postgres -qc "CREATE DATABASE $$db"; \
+	done; echo "databases ready: ghostseats, ghostseats_test"
 
 db-down: ## Stop the local database
 	docker stop $(DB_CONTAINER)
