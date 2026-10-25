@@ -1,11 +1,13 @@
-"""The operational scripts' pure parts: VAPID keys, QR sheet, fake-node payload, seeding pattern."""
+"""The operational scripts' pure parts: VAPID keys, QR sheet, fake-node payload, seeding, cards."""
 
 from __future__ import annotations
 
 import base64
 
+import pytest
 from py_vapid import Vapid  # the class pywebpush signs with
 
+from scripts import card_images
 from scripts.fake_node import STATES, FakeNode
 from scripts.seat_qr import seat_url, sheet
 from scripts.seed_history import sensed
@@ -48,3 +50,15 @@ def test_seeded_history_follows_busyness() -> None:
     quiet = sum(sensed(f"s{i}", 1, 10) == (False, False) for i in range(500))
     busy = sum(sensed(f"s{i}", 1, 90) == (False, False) for i in range(500))
     assert quiet > busy
+
+
+def test_card_images_cover_every_card_key_and_reject_non_png() -> None:
+    """Every key a match can point at has a scene, and a WebP answer is refused, not saved."""
+    assert set(card_images.card_keys()) <= set(card_images.SCENES)
+    assert "generic" in card_images.card_keys()
+    png = card_images.PNG + b"rest"
+    ok = {"data": [{"b64_json": base64.b64encode(png).decode()}]}
+    assert card_images.parse_png(ok) == png
+    webp = {"data": [{"b64_json": base64.b64encode(b"RIFF....WEBP").decode()}]}
+    with pytest.raises(ValueError):
+        card_images.parse_png(webp)
