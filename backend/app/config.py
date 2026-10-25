@@ -23,6 +23,8 @@ class Settings(BaseSettings):
     vapid_private_key: SecretStr
     vapid_subject: str = Field(pattern=r"^(mailto:|https://)")
     muse_api_key: SecretStr | None = None
+    muse_base_url: str = Field("https://api.meta.ai/v1", pattern=r"^https://")
+    muse_model: str = Field("muse-spark-1.3", min_length=1)
     frontend_dist: str | None = None
     cookie_secure: bool = False
     worker_enabled: bool = True
