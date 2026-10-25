@@ -17,6 +17,6 @@ def make_pool(
         name=name,
         open=True,
         kwargs={"autocommit": False},
-        timeout=10,
+        timeout=5,  # how long a request waits for a pooled connection before 503
     )
     return pool

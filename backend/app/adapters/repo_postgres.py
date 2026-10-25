@@ -44,7 +44,7 @@ from app.domain.types import (
     Topic,
     User,
 )
-from app.services.ports import Conflict, Lock, PushSubscription
+from app.services.ports import Conflict, Lock, PushSubscription, Unavailable
 
 log = logging.getLogger("ghostseats.repo")
 
@@ -681,6 +681,17 @@ class PostgresTx:
         return [str(r["id"]) for r in rows]
 
 
+@contextmanager
+def _unavailable_on_connection_failure() -> Iterator[None]:
+    """Connection-level failures become the port's `Unavailable` (503), never a 500 with
+    driver details. Query errors (bad SQL, constraint violations) are not caught here."""
+    try:
+        yield
+    except psycopg.OperationalError as exc:  # PoolTimeout and lost connections included
+        log.warning("database unavailable: %s", type(exc).__name__)
+        raise Unavailable from exc
+
+
 class PostgresRepository:
     def __init__(self, url: str, read_url: str | None = None, *, pool_size: int) -> None:
         self._primary = make_pool(url, max_size=pool_size, name="primary")
@@ -695,14 +706,18 @@ class PostgresRepository:
 
     @contextmanager
     def tx(self) -> Iterator[PostgresTx]:
-        with self._primary.connection() as conn, conn.transaction():
+        with (
+            _unavailable_on_connection_failure(),
+            self._primary.connection() as conn,
+            conn.transaction(),
+        ):
             yield PostgresTx(conn)
 
     @contextmanager
     def read(self) -> Iterator[PostgresTx]:
         """Read-only work; served by the replica when DATABASE_READ_URL is set (D32)."""
         pool = self._replica or self._primary
-        with pool.connection() as conn, conn.transaction():
+        with _unavailable_on_connection_failure(), pool.connection() as conn, conn.transaction():
             conn.execute(b"SET TRANSACTION READ ONLY")
             yield PostgresTx(conn)
 
@@ -720,6 +735,6 @@ class PostgresRepository:
     ) -> list[tuple[datetime, float]]:
         pool = self._replica or self._primary
         params = {"building": building_id, "since": since, "until": until, "offline": offline}
-        with pool.connection() as conn, conn.cursor() as cur:
+        with _unavailable_on_connection_failure(), pool.connection() as conn, conn.cursor() as cur:
             cur.execute(HISTORY_SQL.encode(), params)
             return [(hour, float(avg)) for hour, avg in cur.fetchall()]

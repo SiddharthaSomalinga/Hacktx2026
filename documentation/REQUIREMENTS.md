@@ -19,7 +19,7 @@ Decision numbers refer to `PLAN.md`, decision log.
 - **FR-49** History comes from change-only readings as time in state, over `HISTORY_WINDOW_H` (D31).
 - **New:** FR-50 one role at a time (D23) · FR-51–FR-53 push notifications (D28, D30) · FR-54 optional related-subject retry (D19).
 - **NFR-2** Timeouts are evaluated on read/write, on sensor ingest and by one scheduler tick (D29). **NFR-4** Installable PWA (D28). **New NFR-8** horizontal scale (D32).
-- **Found during the build (v1.1, same release):** `label`, `searches.joined_at`, `host_sessions.confirm_notified_at` (§6); `table_not_found`, `seat_taken` (§7); `PUSH_MAX_ATTEMPTS`, `FRONTEND_DIST`, `COOKIE_SECURE`, `WORKER_ENABLED`, `DB_POOL_SIZE` (§8); Q12 values 24 h / 30 days.
+- **Found during the build (v1.1, same release):** `label`, `searches.joined_at`, `host_sessions.confirm_notified_at` (§6); `table_not_found`, `seat_taken`, `database_unavailable` (§7); `PUSH_MAX_ATTEMPTS`, `FRONTEND_DIST`, `COOKIE_SECURE`, `WORKER_ENABLED`, `DB_POOL_SIZE` (§8); Q12 values 24 h / 30 days.
 - **§6** Adds `buildings.lat/lng`, `keywords`, `offered_group`, change-only `seat_readings` with offline markers, `push_subscriptions` and `notification_outbox`. **§7** New and changed endpoints, node key, error codes. **§8** New keys and an environment table.
 
 # 1. Overview
@@ -279,6 +279,7 @@ JSON over HTTPS. Errors: `{"error": "<code>", "message": "<sentence>"}` with a 4
 | 409 | `seat_not_occupied`, `seat_taken`, `not_linked`, `already_hosting`, `already_searching`, `no_real_hosts`, `request_not_pending`, `search_not_active`, `match_not_active`, `confirm_not_due` |
 | 422 | `validation_error` |
 | 429 | `rate_limited` |
+| 503 | `database_unavailable` (with `Retry-After`); the client keeps polling and shows an offline state |
 
 # 8. Configuration
 

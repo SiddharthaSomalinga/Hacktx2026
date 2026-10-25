@@ -28,6 +28,10 @@ class Conflict(Exception):
     """A uniqueness rule in the store rejected the write (e.g. one active search per seeker)."""
 
 
+class Unavailable(Exception):
+    """The store cannot be reached right now (connection refused, pool exhausted, lost link)."""
+
+
 class Lock(StrEnum):
     """How a read locks its row. `SKIP` returns None instead of waiting on a locked row."""
 

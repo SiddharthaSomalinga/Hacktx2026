@@ -93,3 +93,23 @@ def test_unknown_api_paths_stay_json_404_with_the_frontend_mounted(
     client = TestClient(create_app(make_settings(frontend_dist=str(dist)), world.services))
     r = client.get("/api/nope")
     assert r.status_code == 404 and r.json()["error"] == "not_found"
+
+
+def test_database_outage_is_a_quick_503_not_a_500(caplog: pytest.LogCaptureFixture) -> None:
+    import time
+
+    from app.wiring import build_services
+
+    settings = make_settings(database_url="postgresql://u:p@127.0.0.1:1/none", map_cache_s=0)
+    services = build_services(settings)
+    client = TestClient(create_app(settings, services), raise_server_exceptions=False)
+    try:
+        assert client.get("/api/health").json() == {"ok": True, "db": False}
+        started = time.perf_counter()
+        r = client.get("/api/buildings")
+        assert time.perf_counter() - started < 8  # pool wait (5 s), not a hang
+        assert r.status_code == 503 and r.headers["retry-after"] == "5"
+        assert r.json()["error"] == "database_unavailable"
+        assert "psycopg" not in r.text and "127.0.0.1" not in r.text
+    finally:
+        services.ctx.repo.close()  # type: ignore[attr-defined]

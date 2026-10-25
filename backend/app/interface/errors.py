@@ -10,6 +10,7 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.services.errors import DomainError
+from app.services.ports import Unavailable
 
 log = logging.getLogger("ghostseats.errors")
 
@@ -22,6 +23,12 @@ def install(app: FastAPI) -> None:
     @app.exception_handler(DomainError)
     async def domain_error(_: Request, exc: DomainError) -> JSONResponse:
         return _body(exc.code, exc.message, exc.status)
+
+    @app.exception_handler(Unavailable)
+    async def unavailable(_: Request, __: Unavailable) -> JSONResponse:
+        response = _body("database_unavailable", "We're briefly offline; try again shortly", 503)
+        response.headers["Retry-After"] = "5"
+        return response
 
     @app.exception_handler(RequestValidationError)
     async def validation_error(_: Request, exc: RequestValidationError) -> JSONResponse:
