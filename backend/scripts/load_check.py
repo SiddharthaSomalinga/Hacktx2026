@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import multiprocessing
 import os
 import random
 import statistics
@@ -56,11 +57,24 @@ def setup(nodes: int) -> None:
     print(f"set up {nodes} nodes x 4 seats in building {LOAD_BUILDING!r}")
 
 
+def _int_counter() -> dict[int, int]:
+    return defaultdict(int)  # module-level so Stats pickles across processes
+
+
 class Stats:
     def __init__(self) -> None:
         self.latency: dict[str, list[float]] = defaultdict(list)
-        self.status: dict[str, dict[int, int]] = defaultdict(lambda: defaultdict(int))
+        self.status: dict[str, dict[int, int]] = defaultdict(_int_counter)
         self.errors: dict[str, int] = defaultdict(int)
+
+    def merge(self, other: Stats) -> None:
+        for name, xs in other.latency.items():
+            self.latency[name].extend(xs)
+        for name, codes in other.status.items():
+            for code, n in codes.items():
+                self.status[name][code] += n
+        for name, n in other.errors.items():
+            self.errors[name] += n
 
     def record(self, name: str, started: float, response: httpx.Response | None) -> None:
         if response is None:
@@ -132,16 +146,22 @@ async def node(client: httpx.AsyncClient, stats: Stats, stop: float, n: int, key
         await asyncio.sleep(2)
 
 
-async def run(base_url: str, clients: int, nodes: int, seconds: float, poll_s: float) -> Stats:
+async def run(base_url: str, clients: int, nodes: range, seconds: float, poll_s: float) -> Stats:
     key = os.environ.get("NODE_KEY", "")
     stats = Stats()
     stop = time.perf_counter() + seconds
-    limits = httpx.Limits(max_connections=200, max_keepalive_connections=200)
+    limits = httpx.Limits(
+        max_connections=clients + len(nodes), max_keepalive_connections=clients + len(nodes)
+    )
     async with httpx.AsyncClient(base_url=base_url, limits=limits, timeout=10) as client:
         tasks = [phone(client, stats, stop, poll_s) for _ in range(clients)]
-        tasks += [node(client, stats, stop, n, key) for n in range(nodes)]
+        tasks += [node(client, stats, stop, n, key) for n in nodes]
         await asyncio.gather(*tasks)
     return stats
+
+
+def _run_part(base_url: str, clients: int, nodes: range, seconds: float, poll_s: float) -> Stats:
+    return asyncio.run(run(base_url, clients, nodes, seconds, poll_s))
 
 
 def main(argv: list[str]) -> int:
@@ -153,6 +173,7 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--nodes", type=int, default=50)
     parser.add_argument("--seconds", type=float, default=60)
     parser.add_argument("--poll", type=float, default=3.0)
+    parser.add_argument("--procs", type=int, default=4, help="generator processes")
     parser.add_argument("--setup", action="store_true", help="create the load-test nodes first")
     args = parser.parse_args(argv)
     if args.nodes and not os.environ.get("NODE_KEY"):
@@ -160,9 +181,26 @@ def main(argv: list[str]) -> int:
         return 2
     if args.setup:
         setup(args.nodes)
-    stats = asyncio.run(run(args.base_url, args.clients, args.nodes, args.seconds, args.poll))
+    # One asyncio process saturates a core around 500 clients, which then measures the generator
+    # rather than the backend; split the load across processes and merge the samples.
+    jobs = [
+        (
+            args.base_url,
+            len(range(i, args.clients, args.procs)),
+            range(i, args.nodes, args.procs),
+            args.seconds,
+            args.poll,
+        )
+        for i in range(args.procs)
+    ]
+    with multiprocessing.Pool(args.procs) as pool:
+        parts = pool.starmap(_run_part, jobs)
+    stats = Stats()
+    for part in parts:
+        stats.merge(part)
     print(
-        f"{args.clients} clients, {args.nodes} nodes, {args.seconds:.0f} s against {args.base_url}"
+        f"{args.clients} clients, {args.nodes} nodes, {args.procs} generator processes,"
+        f" {args.seconds:.0f} s against {args.base_url}"
     )
     print(stats.report())
     return 0
