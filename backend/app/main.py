@@ -10,6 +10,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import FileResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.config import Settings, get_settings
@@ -90,6 +91,8 @@ def _mount_frontend(app: FastAPI, dist: Path) -> None:
 
     @app.get("/{path:path}", include_in_schema=False)
     def frontend(path: str) -> FileResponse:
+        if path == "api" or path.startswith("api/"):
+            raise StarletteHTTPException(404, "Not Found")  # API misses stay JSON, never the SPA
         candidate = (root / path).resolve()
         if path and candidate.is_file() and candidate.is_relative_to(root):
             return FileResponse(candidate)

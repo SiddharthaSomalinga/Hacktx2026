@@ -84,7 +84,6 @@ def test_static_frontend_cannot_escape_its_folder(tmp_path: Path, world: World) 
         assert "TOP SECRET" not in client.get(probe).text, probe
 
 
-@pytest.mark.xfail(strict=True, reason="bug: the SPA catch-all answers unknown /api paths")
 def test_unknown_api_paths_stay_json_404_with_the_frontend_mounted(
     tmp_path: Path, world: World
 ) -> None:
