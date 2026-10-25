@@ -26,6 +26,7 @@ from app.interface.routes import (
     search,
 )
 from app.services.container import Services
+from app.worker import Worker
 
 log = logging.getLogger("ghostseats.http")
 
@@ -33,7 +34,14 @@ log = logging.getLogger("ghostseats.http")
 def create_app(settings: Settings, services: Services) -> FastAPI:
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
-        yield
+        worker = Worker(services, settings.scheduler_tick_s) if settings.worker_enabled else None
+        if worker is not None:
+            worker.start()
+        try:
+            yield
+        finally:
+            if worker is not None:
+                worker.stop()
 
     app = FastAPI(
         title="Ghost Seats API",
