@@ -409,6 +409,46 @@ Caught before committing:
 - **Still open:** seat colors (green = occupied in the UI, green = open for LEDs and FR-8) are
   a team decision. The history chart's orange curve is decorative.
 
+## 2026-10-25 — Session 7: 5-minute requests, name and major before accept (D42, D43)
+
+### Changes
+- **Backend:**
+  - `REQUEST_TIMEOUT_S` 300.
+  - `users.major` (an `ADD COLUMN IF NOT EXISTS` migration) and seeded majors.
+  - Inbox items carry `seeker_first_name`/`seeker_major`.
+  - `GET /api/search/:id` carries `asking {first_name, major}`.
+  - The request push reads "Priya · Chemistry wants to study …".
+  - The match view adds `other_major`.
+  - Muse ranking and icebreakers receive majors through `Topic.major`; names never do.
+- **Tests:**
+  - The old "no names before accept" assertions are replaced by D43's.
+  - Hard-coded 120 s waits now read `request_timeout_s`.
+  - Two Muse tests: majors reach the payload; names and empty majors do not.
+- **Frontend (`v1final`):** the picker shows majors; the seeker strip reads "Asking Alex ·
+  Biochemistry · 4:55 left"; the host card reads "Priya · Chemistry wants to study CH 320M ·
+  Organic Chemistry I"; both match views show the major.
+- **`USER_FLOWS.md` v1.2:** the revisions, plus §3, the connection flow. It covers the sequence
+  across both phones, the backend and Muse, what each side sees per stage, every Muse call
+  with its bound and fallback, and the timers.
+
+### Verification
+- `make check`: 174 passed, 29 skipped. `make test-db`: 205 passed. Ruff and mypy `--strict`
+  clean.
+- **Two phones in headless Chromium at 375 px, live Muse:**
+  - Alex findable.
+  - Priya: "Asking Alex · Biochemistry · 4:55 left".
+  - Alex's card: "Priya · Chemistry wants to study CH 320M · Organic Chemistry I", 4:51 left.
+  - Accept: each match view shows the other's first name and major.
+  - Icebreaker: "Want to team up on Organic Chemistry I mechanisms and share Chemistry and
+    Biochemistry study tricks?"
+  - "I'm here" → completed. All 200.
+
+### Not done
+- **The Tiger migration.** Tiger was unreachable from the venue network. On a hotspot, run
+  `make db-init seed` from `backend/` before deploying this commit.
+- **`make seed` on the e2e database** failed on the e2e-only fixture tables (simulated seats
+  per table); only the users upsert was applied there. Tiger has no such tables.
+
 ## Next steps
 1. **Q14 (team):** a second sensed seat at the demo table, and a person sensor or a changed
    demo. Without them the real table cannot host a match or show a ghost seat.

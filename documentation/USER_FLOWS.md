@@ -1,4 +1,4 @@
-# Ghost Seats — User flows (v1.1)
+# Ghost Seats — User flows (v1.2)
 
 **Authoritative for user-facing behavior**, alongside `REQUIREMENTS.md`.
 Transcribed from the team's flowcharts. Anything neither this file nor
@@ -18,6 +18,8 @@ and corrected them. Decision numbers refer to the `PLAN.md` decision log.
 | "Join someone?" | Shown only when the offered group has a real host | D19, D22 |
 | "Turn on 'Open to study partners'" | Opens host setup; the session is created at link | D17 |
 | — | Optional "Try related material?" after a same-course search runs out | D19 |
+| "Waits up to 2 min" | Waits up to 5 min per host (v1.2) | D42 |
+| "No names yet" until accept | Search results stay anonymous; once a request is sent, each side sees the other's first name and major; location only after accept (v1.2) | D43 |
 
 ## 1. Seeker / visitor flow
 
@@ -36,11 +38,11 @@ flowchart TD
   anyMatch -->|"None, or their tables are full"| noneStudying["No one's studying this right now"]
   showCount --> join{"Join someone?<br/>shown only if a real host exists"}
   related --> join
-  join -->|"Yes"| request["Request goes to the top-ranked real host<br/>in the offered group, one at a time, waits up to 2 min"]
+  join -->|"Yes"| request["Request goes to the top-ranked real host<br/>in the offered group, one at a time, waits up to 5 min<br/>seeker sees 'Asking Alex · Biochemistry'"]
   join -->|"No"| pick
   request --> hostAnswers{"Host answers"}
   hostAnswers -->|"Accept"| matchScreen["Match screen: first name, table,<br/>open seat next to them, icebreaker card"]
-  hostAnswers -->|"Not now, or 2 min pass"| moreHosts{"More hosts<br/>in the offered group?"}
+  hostAnswers -->|"Not now, or 5 min pass"| moreHosts{"More hosts<br/>in the offered group?"}
   moreHosts -->|"Yes"| request
   moreHosts -->|"No"| noneFree["No one's free right now"]
   noneFree --> pick
@@ -73,8 +75,8 @@ flowchart TD
 | Any matches? — same course / related only / none | FR-24, 29 (D19) | `POST /api/search` → `offered_group`, `same_course`, `related` |
 | None, or their tables are full | FR-24 | Both groups empty → "No one's studying this right now" |
 | Join shown only if a real host exists | FR-29 (D19, D22) | `has_real_hosts`; join otherwise returns `no_real_hosts` |
-| Request to the top-ranked real host, up to 2 min | FR-30..32 (D15, D22); `REQUEST_TIMEOUT_S` | `POST /api/search/:id/join`, poll `GET /api/search/:id` |
-| Not now, or 2 min pass → more hosts in the offered group? | FR-32, 33, 36 (D19) | The cascade never crosses groups |
+| Request to the top-ranked real host, up to 5 min | FR-30..32 (D15, D22, D42); `REQUEST_TIMEOUT_S` | `POST /api/search/:id/join`, poll `GET /api/search/:id` → `asking {first_name, major}` (D43) |
+| Not now, or 5 min pass → more hosts in the offered group? | FR-32, 33, 36 (D19) | The cascade never crosses groups |
 | No one's free right now | FR-33, FR-52 | Search `exhausted`; push to the seeker |
 | Optional: try related material | FR-54 (D19) | `POST /api/search {topic_raw, group: "related"}` |
 | Match screen | FR-37, 38, 52 | `GET /api/matches/:id`; push "accepted" to the seeker |
@@ -103,7 +105,7 @@ flowchart TD
   occupied -->|"No"| cantLink["Can't link to an empty seat"]
   cantLink --> link
   occupied -->|"Yes"| topic["Enter today's topic<br/>now findable by matching seekers"]
-  topic --> requestArrives{"A request arrives"}
+  topic --> requestArrives{"A request arrives<br/>'Priya · Chemistry wants to study CH 320M'"}
   topic --> whileSeated{"While you're seated"}
   requestArrives -->|"Accept"| accepted["Seeker gets your table<br/>your seat LED blinks blue"]
   requestArrives -->|"Not now"| notNow["Silent: the seeker is never told"]
@@ -126,10 +128,86 @@ flowchart TD
 | Link, real product: tap the NFC sticker | §11 lists NFC tags as out of scope | Not built |
 | Does the seat read occupied? No → can't link | FR-22 | Error `seat_not_occupied`; `already_searching` if FR-50 applies |
 | Enter today's topic → findable | FR-23, 24 | `POST /api/host/topic` |
-| Request arrives → Accept | FR-37, 51, 52 | Push "request received"; `POST /api/requests/:id/accept` |
+| Request arrives → Accept | FR-36, 37, 51, 52 (D43) | Card and push show the seeker's first name and major; `POST /api/requests/:id/accept` |
 | Not now → silent | FR-36 | `POST /api/requests/:id/decline` |
 | Mute → declined, no new requests; unmute | FR-28 (D20) | `POST /api/requests/:id/decline {mute: true}`; `POST /api/host/mute {muted: false}` |
 | No person for 10 min → status ends | FR-26 (D18); `HOST_END_S` | Evaluated on ingest (NFR-2); push "session ended" |
 | Step away → hidden, requests paused; come back → findable | FR-24, 25 (D18) | `/api/me` → `hidden_reason: away` |
 | Leave, backpack stays → hidden, yellow publicly, identity never shown | FR-4, 6, 25, 26, 43 (D18) | Same timers as stepping away |
 | 3 hours pass → hidden; confirm within 2 min | FR-27 (D24); `SESSION_MAX_S`, `CONFIRM_GRACE_S` | Push "confirm needed"; `POST /api/host/confirm`; scheduler ends it otherwise |
+
+## 3. Connection flow: Muse and the match (v1.2)
+
+How two strangers become study partners, step by step. Each side's phone polls the backend
+every 2–3 s (FR-10), and push notifications (FR-51..53) reach a locked phone. Muse calls
+are shown with what they receive; names never reach the model (D43).
+
+```mermaid
+sequenceDiagram
+  autonumber
+  actor H as Alex (host, Biochemistry)
+  participant B as Backend
+  participant M as Muse Spark
+  actor S as Priya (seeker, Chemistry)
+
+  H->>B: Link seat t1-s1 (a person must be sensed there)
+  H->>B: Topic "orgo 1 exam prep"
+  B->>M: normalize_topic(text)
+  M-->>B: CH 320M · chemistry · keywords
+  Note over H,B: Alex is findable: topic set, person present, an open seat at his table
+
+  S->>B: Search "ch 320m mechanisms"
+  B->>M: normalize_topic(text) (cached per distinct text)
+  M-->>B: CH 320M
+  B-->>S: Same course: PCL floor 2 · 1 host (counts only, no names)
+  S->>B: Join
+  B->>M: rank_hosts(seeker topic + major, hosts' topics + majors + about-me)
+  M-->>B: score 0–100 per host
+  B-->>H: Push and card "Priya · Chemistry wants to study CH 320M" (5 min)
+  B-->>S: "Asking Alex · Biochemistry · 4:59 left"
+
+  alt Alex accepts
+    H->>B: Accept
+    B->>M: icebreaker(both topics + both majors)
+    M-->>B: one sentence (≤ 140 chars)
+    B-->>H: Match: Priya · Chemistry, icebreaker; seat LED blinks blue
+    B-->>S: Push and match: Alex · PCL · Floor 2 · Table 01 · Seat t1-s2, icebreaker
+    S->>B: I'm here (LED blinks again) → completed
+  else Not now, mute, or 5 min pass
+    B->>B: Next top-ranked real host in the same group (recomputed, untried)
+    B-->>S: "Asking Jordan · Computer Science"
+  else No one left
+    B-->>S: "No one's free right now" + seat recommendation
+  end
+```
+
+### What each person sees
+
+| Stage | Seeker sees | Host sees | Hidden until later |
+|---|---|---|---|
+| Search results | Counts by building and floor, per group | Nothing | Every name and seat |
+| Request pending (≤ 5 min) | "Asking Alex · Biochemistry", time left | Card "Priya · Chemistry wants to study CH 320M", their own table, Accept / Not now / Mute | The host's location; whether a decline happened (silent) |
+| Accepted | Host's first name and major, building, floor, table, assigned seat, icebreaker | Seeker's first name and major, icebreaker | — |
+| Seat taken before arrival | Nearest open seat on the floor (both views) | Same | — |
+| Ended | Completed, cancelled or expired | Same | — |
+
+### Where Muse is used
+
+| Call | When | Input to Muse | Output | Bound and fallback |
+|---|---|---|---|---|
+| `normalize_topic` | Host topic, seeker search | The typed text only | Catalog course code (or none), subject, keywords; strict JSON schema with catalog enums | `AI_TIMEOUT_S` (4 s); else regex + alias catalog. Cached per text in `topic_cache` |
+| `rank_hosts` | Join, and every hop of the cascade | Seeker topic and major; each host's topic, major and about-me under aliases `h1…hN` | Score 0–100 per host; invented, repeated or missing hosts are rejected | 4 s; else keyword overlap. Runs before any row lock |
+| `icebreaker` | Accept | Both topics and both majors; the shared course if any | One sentence, ≤ 140 chars, no names or personal questions | 4 s; else the template "You're both studying …". Runs before any row lock |
+
+Every Muse failure (timeout, HTTP error, invalid output) is answered by the fallback, so no
+step above waits on or fails because of the model (NFR-3).
+
+### Timers that shape the connection
+
+| Timer | Value | Effect |
+|---|---|---|
+| `REQUEST_TIMEOUT_S` | 5 min (D42) | A pending request moves to the next host |
+| `MAX_HOSTS_PER_SEARCH` | 5 | After 5 hosts the search ends as exhausted |
+| `MATCH_TIMEOUT_S` | 20 min | A seeker who never taps "I'm here" lets the match expire; the host is findable again |
+| `HOST_LEAVE_CANCEL_S` | 2 min | Host's seat with no person cancels the match |
+| `BLINK_S` | 60 s | Host's seat LED blinks blue on accept and again on arrival |
