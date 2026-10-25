@@ -61,6 +61,24 @@ def _int_counter() -> dict[int, int]:
     return defaultdict(int)  # module-level so Stats pickles across processes
 
 
+def teardown() -> None:
+    """Remove everything `setup` created, so the load test leaves no seats behind."""
+    import psycopg
+
+    from app.config import get_settings
+
+    with psycopg.connect(get_settings().database_url) as conn, conn.transaction():
+        seats = "SELECT id FROM seats WHERE node_id LIKE 'load-n%%'"
+        conn.execute(f"DELETE FROM seat_readings WHERE seat_id IN ({seats})".encode())
+        conn.execute(f"DELETE FROM seat_state WHERE seat_id IN ({seats})".encode())
+        conn.execute(b"DELETE FROM seats WHERE node_id LIKE 'load-n%%'")
+        conn.execute(b"DELETE FROM nodes WHERE id LIKE 'load-n%%'")
+        conn.execute(b"DELETE FROM building_open_hourly WHERE building_id = 'loadtest'")
+        conn.execute(b"DELETE FROM tables WHERE building_id = 'loadtest'")
+        conn.execute(b"DELETE FROM buildings WHERE id = 'loadtest'")
+    print(f"removed the {LOAD_BUILDING!r} load-test data")
+
+
 class Stats:
     def __init__(self) -> None:
         self.latency: dict[str, list[float]] = defaultdict(list)
@@ -164,6 +182,19 @@ def _run_part(base_url: str, clients: int, nodes: range, seconds: float, poll_s:
     return asyncio.run(run(base_url, clients, nodes, seconds, poll_s))
 
 
+def node_key() -> str:
+    """NODE_KEY from the environment, else from .env through the app's settings."""
+    key = os.environ.get("NODE_KEY")
+    if key:
+        return key
+    try:
+        from app.config import get_settings
+
+        return get_settings().node_key.get_secret_value()
+    except Exception:
+        return ""
+
+
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
@@ -174,11 +205,14 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--seconds", type=float, default=60)
     parser.add_argument("--poll", type=float, default=3.0)
     parser.add_argument("--procs", type=int, default=4, help="generator processes")
-    parser.add_argument("--setup", action="store_true", help="create the load-test nodes first")
+    parser.add_argument(
+        "--setup", action="store_true", help="create the load-test nodes first, remove them after"
+    )
     args = parser.parse_args(argv)
-    if args.nodes and not os.environ.get("NODE_KEY"):
-        print("NODE_KEY must be set for the node load", file=sys.stderr)
+    if args.nodes and not node_key():
+        print("NODE_KEY must be set in the environment or .env", file=sys.stderr)
         return 2
+    os.environ["NODE_KEY"] = node_key()  # generator processes read it from the environment
     if args.setup:
         setup(args.nodes)
     # One asyncio process saturates a core around 500 clients, which then measures the generator
@@ -193,8 +227,12 @@ def main(argv: list[str]) -> int:
         )
         for i in range(args.procs)
     ]
-    with multiprocessing.Pool(args.procs) as pool:
-        parts = pool.starmap(_run_part, jobs)
+    try:
+        with multiprocessing.Pool(args.procs) as pool:
+            parts = pool.starmap(_run_part, jobs)
+    finally:
+        if args.setup:
+            teardown()
     stats = Stats()
     for part in parts:
         stats.merge(part)

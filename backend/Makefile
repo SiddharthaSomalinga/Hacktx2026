@@ -61,5 +61,5 @@ qr: ## Printable QR sheet for /seat/<id> (ORIGIN=https://…)
 vapid-keys: ## Generate a VAPID key pair for .env
 	$(RUN) python -m scripts.vapid_keys
 
-load-check: ## 500 polling clients + 50 fake nodes against BASE_URL
-	$(RUN) python -m scripts.load_check --base-url "$${BASE_URL:-http://localhost:8000}"
+load-check: ## 500 polling clients + 50 fake nodes against BASE_URL (creates load-test seats)
+	$(RUN) python -m scripts.load_check --setup --base-url "$${BASE_URL:-http://localhost:8000}" $(ARGS)

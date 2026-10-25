@@ -66,6 +66,19 @@ class FakeNode:
                 stop.wait(every_s)
 
 
+def node_key() -> str:
+    """NODE_KEY from the environment, else from .env through the app's settings."""
+    key = os.environ.get("NODE_KEY")
+    if key:
+        return key
+    try:
+        from app.config import get_settings
+
+        return get_settings().node_key.get_secret_value()
+    except Exception:
+        return ""
+
+
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
@@ -75,9 +88,9 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--seats", default="t1-s1,t1-s2", help="seat ids in node order")
     parser.add_argument("--every", type=float, default=2.0)
     args = parser.parse_args(argv)
-    key = os.environ.get("NODE_KEY")
+    key = node_key()
     if not key:
-        print("NODE_KEY must be set (same value as the backend's)", file=sys.stderr)
+        print("NODE_KEY must be set in the environment or .env", file=sys.stderr)
         return 2
     node = FakeNode(args.base_url, args.node_id, args.seats.split(","), key)
     stop = threading.Event()
