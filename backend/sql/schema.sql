@@ -1,4 +1,4 @@
--- Ghost Seats schema (REQUIREMENTS §6). Idempotent: safe to re-run on an empty or existing database.
+-- Synapse schema (REQUIREMENTS §6). Idempotent: safe to re-run on an empty or existing database.
 -- All times are timestamptz in UTC (NFR-5).
 
 CREATE EXTENSION IF NOT EXISTS timescaledb;
