@@ -1,4 +1,4 @@
-# Synapse (Ghost Seats)
+# Synapse
 
 > **Real-time IoT library desk occupancy sensing that eliminates ghost seats, paired with AI-driven study partner matching.**
 > *Built for HackTX 2026 at The University of Texas at Austin.*
