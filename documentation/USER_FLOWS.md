@@ -1,4 +1,4 @@
-# Ghost Seats — User flows (v1.2)
+# Synapse — User flows (v1.2)
 
 **Authoritative for user-facing behavior**, alongside `REQUIREMENTS.md`.
 Transcribed from the team's flowcharts. Anything neither this file nor
@@ -25,7 +25,7 @@ and corrected them. Decision numbers refer to the `PLAN.md` decision log.
 
 ```mermaid
 flowchart TD
-  start(["Open Ghost Seats<br/>no login to browse"]) --> map["Map: buildings colored by open seats"]
+  start(["Open Synapse<br/>no login to browse"]) --> map["Map: buildings colored by open seats"]
   map --> topic{"What are you studying today?"}
   topic -->|"Types a topic"| loggedIn{"Logged in?"}
   topic -->|"Skip"| pick["Pick building, then floor, then table"]

@@ -1,4 +1,4 @@
-# Ghost Seats v2 — features and how to test them
+# Synapse v2 — features and how to test them
 
 Covers the app on `v2-frontendredo` (D44) with the backend on `v1backend`. Every check below
 was run on a Mac with headless Chromium unless it says **(device)**: those need a real phone.
