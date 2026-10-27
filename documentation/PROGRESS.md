@@ -1,4 +1,4 @@
-# PROGRESS.md — Ghost Seats
+# PROGRESS.md — Synapse
 
 Session log. Concrete changes, commands and observed results only.
 

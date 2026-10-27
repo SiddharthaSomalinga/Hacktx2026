@@ -1,7 +1,7 @@
 [project]
 name = "ghost-seats-backend"
 version = "0.1.0"
-description = "Ghost Seats backend: seat-state engine, study matching, push notifications"
+description = "Synapse backend: seat-state engine, study matching, push notifications"
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "fastapi>=0.115,<1",

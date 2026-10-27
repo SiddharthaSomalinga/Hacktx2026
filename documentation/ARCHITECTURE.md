@@ -1,4 +1,4 @@
-# Ghost Seats — Architecture
+# Synapse — Architecture
 
 How the system is built. **What** it must do lives in `REQUIREMENTS.md` (v1.1)
 and `USER_FLOWS.md`. This file cites requirement ids (`FR-24`) and decision

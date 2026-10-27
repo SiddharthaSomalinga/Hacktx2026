@@ -1,4 +1,4 @@
-# Ghost Seats — Plan
+# Synapse — Plan
 
 Who builds what, in what order, and why. Requirement ids refer to
 `REQUIREMENTS.md` (v1.1), flow steps to `USER_FLOWS.md`, and "ARCH §n" to
