@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # Rolling deploy of one pushed commit to every instance, one at a time (D36). From your laptop:
-#   HOSTS="root@<ip-1> root@<ip-2>" backend/deploy/deploy.sh [git-ref, default origin/v1final]
+#   HOSTS="root@<ip-1> root@<ip-2>" backend/deploy/deploy.sh [git-ref, default origin/main]
 # Each host must be healthy before the next is touched, so a failed build or a crash-looping
 # container stops the rollout while the remaining hosts keep serving the previous version.
 set -euo pipefail
 
 hosts=${HOSTS:?set HOSTS to the ssh targets, e.g. HOSTS="root@1.2.3.4 root@5.6.7.8"}
-ref=${1:-origin/v1final}
+ref=${1:-origin/main}
 frontend_dir=${FRONTEND_DIR:-frontend}
 remote_dir=${REMOTE_DIR:-/opt/ghostseats}
 health_timeout_s=${HEALTH_TIMEOUT_S:-180}

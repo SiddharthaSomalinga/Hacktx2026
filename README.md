@@ -1,8 +1,15 @@
 # Synapse
 
+[![CI](https://github.com/SiddharthaSomalinga/Hacktx2026/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/SiddharthaSomalinga/Hacktx2026/actions/workflows/ci.yml)
+
 A library seat map fed by desk sensors, with study-partner matching on top. Every seat reading carries `object_present` and `human_present`. A pure state machine in the backend turns them into one of four public states: `open`, `occupied`, `likely_opening` (belongings left with nobody there for 30 s, a "ghost seat"), or `offline`. Students studying the same course can then request an open spot at a host's table. Readings are stored change-only in TimescaleDB, and seat transitions run under `SELECT … FOR UPDATE`, so several API instances can share one database.
 
-Built by 4 people at HackTX 2026, Sat 6 pm → Sun 11:30 am. The tag [`hacktx-2026`](https://github.com/SiddharthaSomalinga/Hacktx2026/tree/hacktx-2026) is what we demoed at 11:30 Sunday; this branch has changed since (docs and cleanup).
+Built by 4 people at HackTX 2026, Sat 6 pm → Sun 11:30 am. The tag [`hacktx-2026`](https://github.com/SiddharthaSomalinga/Hacktx2026/tree/hacktx-2026) is what we demoed at 11:30 Sunday; `main` has changed since (docs, layout, CI).
+
+**Live:** <https://64.177.55.143.sslip.io>. Pick a demo user, search a course such as "macro econ" and tap Join; a simulated host (D56) accepts in about 5 s and the match shows where to go.
+
+<p align="center"><img src="docs/images/demo.gif" width="300" alt="Seat states changing on the floor plan, then a study-partner match"/></p>
+<p align="center"><sub>Recorded on a local stack. <code>make fake-node</code> stands in for the sensor, the ghost timer is shortened to 15 s, and the first half runs at 4× speed. A person sits (blue), a bag is left alone (blue, then yellow "likely opening"), the person leaves (green); then a seeker asks to join and a simulated host accepts.</sub></p>
 
 | Campus map and demo login | Live floor plan | Study-partner match |
 |:---:|:---:|:---:|
@@ -58,7 +65,7 @@ def public_state(s: SeatState, now: datetime, t: Timers) -> PublicState:
 - The away duration is used here and never returned by the API.
 - `now` and the timers are parameters. The domain layer has no clock, database or env access, and a test fails if it imports one.
 
-Every threshold lives in [`backend/app/config.py`](backend/app/config.py) and can be overridden by env var. Transitions happen when a seat is read, when its node reports, or on a 2 s scheduler tick; the tick selects due rows `FOR UPDATE SKIP LOCKED`, so every instance can run the tick. The full state machines (seat, host, request, match) are in [ARCHITECTURE](documentation/ARCHITECTURE.md).
+Every threshold lives in [`backend/app/config.py`](backend/app/config.py) and can be overridden by env var. Transitions happen when a seat is read, when its node reports, or on a 2 s scheduler tick; the tick selects due rows `FOR UPDATE SKIP LOCKED`, so every instance can run the tick. The full state machines (seat, host, request, match) are in [ARCHITECTURE](docs/ARCHITECTURE.md).
 
 ## Matching
 
@@ -109,9 +116,10 @@ make db-init seed policies seed-history
 make dev                      # API on :8000, live contract at /docs
 ```
 
-In a second terminal, from the repo root:
+In a second terminal:
 
 ```bash
+cd frontend
 npm ci
 npm run dev                   # http://localhost:5173, proxies /api to :8000
 ```
@@ -128,8 +136,8 @@ Real hardware: flash `firmware/HACKATHON`, plug in the Arduino, then from the re
 |---|---|
 | `cd backend && make check` | ruff, mypy `--strict`, 184 passed, 29 skipped (Postgres tests skip without a DB) |
 | `cd backend && make test-db` | 213 passed, including the Postgres repository contract tests |
-| `npm test` | 32 passed (Vitest) |
-| `npm run build` | type-checks the app and service worker, builds the PWA |
+| `cd frontend && npm test` | 32 passed (Vitest) |
+| `cd frontend && npm run build` | type-checks the app and service worker, builds the PWA |
 
 `InMemoryRepository` and `PostgresRepository` pass the same contract suite in `backend/tests/repo_contract/`. `make load-check` runs 500 polling clients and 50 fake nodes against a running API.
 
@@ -141,9 +149,17 @@ Real hardware: flash `firmware/HACKATHON`, plug in the Arduino, then from the re
 - The frontend polls every 3 s; there is no WebSocket.
 - Demo hosts are simulated, and there is no real account system: sign-in is a demo-user picker.
 
-## Docs
+## Design
 
-[ARCHITECTURE](documentation/ARCHITECTURE.md) (layers, state machines, push, scaling) · [REQUIREMENTS](documentation/REQUIREMENTS.md) (FR/NFR ids, API contract) · [USER_FLOWS](documentation/USER_FLOWS.md) · [backend README](backend/README.md)
+| Doc | Covers |
+|---|---|
+| [ARCHITECTURE](docs/ARCHITECTURE.md) | Layers, the four state machines, push, scaling to several instances |
+| [REQUIREMENTS](docs/REQUIREMENTS.md) | FR/NFR ids, the API contract, config keys, the data model |
+| [USER_FLOWS](docs/USER_FLOWS.md) | Every screen and what the user can do on it |
+| [TESTING](docs/TESTING.md) | Features with manual test steps |
+| [backend README](backend/README.md) | Running, testing and deploying the API |
+
+[PLAN](docs/PLAN.md) (decisions D1–D59, open questions) and [PROGRESS](docs/PROGRESS.md) (what was run, per session) are the build log.
 
 ## Team
 

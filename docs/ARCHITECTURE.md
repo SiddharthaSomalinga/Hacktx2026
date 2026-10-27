@@ -26,7 +26,16 @@ numbers (`D18`, see the decision log in `PLAN.md`) instead of restating them.
 The backend is the single source of truth for seat state. The only exception
 is the node's local fallback (HW-5).
 
-### Hardware parts (locked)
+### Hardware parts
+
+**As built at the hackathon (Q14).** One IR proximity sensor on D2 of an Arduino with a Grove
+shield, for seat `t1-s1`. The firmware drives its own two LEDs (green open, blue occupied) and
+prints `occupied: true|false` over USB serial; `bridge/` runs on a laptop and sends the value as
+both `object_present` and `human_present`, so a bag reads as a person and `likely_opening` is
+unreachable from the hardware. Planned upgrade (D58): a thermal sensor for `human_present` plus
+IR for `object_present`. Nothing in the backend changes for it.
+
+**Original plan**, kept for reference:
 
 | Part | Signal | Notes |
 |---|---|---|
@@ -35,11 +44,11 @@ is the node's local fallback (HW-5).
 | Arduino UNO R4 | — | Samples every 500 ms (HW-1), drives the LEDs, speaks the serial protocol |
 | Raspberry Pi | — | Runs `bridge/`; serial ⇄ HTTPS (HW-7..10) |
 
-## 2. Repository layout (target)
+## 2. Repository layout
 
 ```
 /
-├── documentation/             # REQUIREMENTS · USER_FLOWS · ARCHITECTURE · PLAN · PROGRESS
+├── docs/                      # REQUIREMENTS · USER_FLOWS · ARCHITECTURE · PLAN · PROGRESS
 ├── backend/                   # FastAPI service (backend role, v1backend)
 │   ├── app/
 │   │   ├── main.py            # create_app(settings, services); static mount of frontend/dist
@@ -58,7 +67,7 @@ is the node's local fallback (HW-5).
 │   └── pyproject.toml · uv.lock · Makefile · .env.example · .gitignore
 ├── bridge/                    # arduino_bridge.py: serial ⇄ POST /api/readings, env config (D39)
 ├── firmware/                  # HACKATHON/HACKATHON.ino: one IR sensor (Q14) (D39)
-└── frontend/                  # Vite + React + PWA; still at the repo root on v1final (D6, D40)
+└── frontend/                  # Vite + React + PWA (D6)
 ```
 
 ## 3. Backend layers

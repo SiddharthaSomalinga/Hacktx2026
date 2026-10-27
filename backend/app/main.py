@@ -47,7 +47,7 @@ def create_app(settings: Settings, services: Services) -> FastAPI:
     app = FastAPI(
         title="Synapse API",
         version="1.1.0",
-        description="Contract: documentation/REQUIREMENTS.md §7.",
+        description="Contract: docs/REQUIREMENTS.md §7.",
         lifespan=lifespan,
     )
     app.state.services = services
