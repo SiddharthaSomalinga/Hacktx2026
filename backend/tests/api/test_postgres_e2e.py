@@ -3,20 +3,25 @@
 from __future__ import annotations
 
 import threading
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
+from dataclasses import replace
+from datetime import timedelta
 
 import psycopg
 import pytest
 
 from app.adapters.ai_fallback import FallbackAI
 from app.adapters.repo_postgres import PostgresRepository
+from app.domain.types import OutboxKind, OutboxMessage, Reading
 from app.main import create_app
 from app.services.container import Services
 from app.services.context import Context
+from app.services.ports import PushResult, PushSubscription
 from tests.api.harness import BAG, PERSON, Node, Phone
 from tests.conftest import make_settings
 from tests.fakes import FakeClock, FakeNotifier
 from tests.pg import db_url_for_tests, reset
+from tests.world import NODE
 
 pytestmark = pytest.mark.db
 
@@ -29,22 +34,25 @@ def pg() -> Iterator[tuple[Services, PostgresRepository, FakeClock, str]]:
     reset(url)
     repo = PostgresRepository(url, pool_size=12)
     clock = FakeClock()
-    settings = make_settings(map_cache_s=0)
+    try:
+        yield _services(repo, clock, FakeNotifier()), repo, clock, url
+    finally:
+        repo.close()
+
+
+def _services(repo: PostgresRepository, clock: FakeClock, notifier: FakeNotifier) -> Services:
     ctx = Context(
         repo=repo,
         ai=FallbackAI(),
-        notifier=FakeNotifier(),
+        notifier=notifier,
         clock=clock,
-        timers=settings.timers(),
+        timers=make_settings(map_cache_s=0).timers(),
         map_cache_s=0,
         history_window_h=24,
         push_max_attempts=5,
         vapid_public_key="k",
     )
-    try:
-        yield Services.build(ctx), repo, clock, url
-    finally:
-        repo.close()
+    return Services.build(ctx)
 
 
 def test_demo_flow_on_postgres(pg: tuple[Services, PostgresRepository, FakeClock, str]) -> None:
@@ -155,3 +163,88 @@ def test_skip_locked_scheduler_ticks_do_not_collide(
             s for (s,) in conn.execute(b"SELECT status FROM requests WHERE search_id = %s", (sid,))
         )
     assert statuses == ["expired", "pending"]  # one expiry, one new request, no duplicates
+
+
+class GatedNotifier(FakeNotifier):
+    """Holds each thread's first send until every drain has claimed its rows, so the drains'
+    claims are guaranteed to overlap instead of merely likely to."""
+
+    def __init__(self, drains: int) -> None:
+        super().__init__()
+        self._gate = threading.Barrier(drains, timeout=5)
+        self._seen = threading.local()
+
+    def send(self, subscription: PushSubscription, payload: Mapping[str, str]) -> PushResult:
+        if not getattr(self._seen, "first", False):
+            self._seen.first = True
+            self._gate.wait()
+        return super().send(subscription, payload)
+
+
+def test_concurrent_drains_send_each_notification_once(
+    pg: tuple[Services, PostgresRepository, FakeClock, str],
+) -> None:
+    _, repo, clock, url = pg
+    drains, per_drain = 4, 5
+    notifier = GatedNotifier(drains)
+    services = _services(repo, clock, notifier)
+    with repo.tx() as tx:
+        tx.upsert_subscription("alex", "https://push.example/alex", "p256dh", "auth", clock.now())
+        tx.enqueue(
+            [
+                OutboxMessage("alex", OutboxKind.REQUEST_RECEIVED, {"n": str(i)})
+                for i in range(drains * per_drain)
+            ],
+            clock.now(),
+        )
+
+    errors: list[BaseException] = []
+
+    def drain() -> None:
+        try:
+            services.push.drain(limit=per_drain)
+        except BaseException as exc:
+            errors.append(exc)
+
+    threads = [threading.Thread(target=drain) for _ in range(drains)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert errors == []
+    sent = sorted(int(payload["n"]) for _, payload in notifier.sent)
+    assert sent == list(range(drains * per_drain))  # every row once: none skipped, none twice
+    with psycopg.connect(url) as conn:
+        unsent = conn.execute(b"SELECT count(*) FROM notification_outbox WHERE sent_at IS NULL")
+        row = unsent.fetchone()
+    assert row is not None and row[0] == 0
+
+
+def test_seat_lock_keeps_a_reading_and_a_concurrent_blink(
+    pg: tuple[Services, PostgresRepository, FakeClock, str],
+) -> None:
+    """Accept and the match view set `blink_until` under the seat lock while ingest rewrites the
+    same row. Without FOR UPDATE, whichever transaction commits second erases the other's write."""
+    services, repo, clock, _ = pg
+    locked = threading.Event()
+    ingested = threading.Event()
+
+    def ingest() -> None:
+        locked.wait()
+        services.readings.ingest(NODE, [Reading("s1", True, True)])
+        ingested.set()
+
+    thread = threading.Thread(target=ingest)
+    thread.start()
+    with repo.tx() as tx:  # the blink half of RequestService.accept
+        state = tx.lock_seat_state("s1")
+        assert state is not None
+        locked.set()
+        assert not ingested.wait(0.5)  # ingest is waiting on the seat lock
+        tx.save_seat_state(replace(state, blink_until=clock.now() + timedelta(seconds=60)))
+    thread.join(10)
+    assert ingested.is_set()
+    with repo.read() as tx:
+        final = tx.seat_states(["s1"])["s1"]
+    assert final.blink_until == clock.now() + timedelta(seconds=60)
+    assert final.last_human == clock.now()
