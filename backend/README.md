@@ -1,4 +1,4 @@
-# Ghost Seats backend
+# Synapse backend
 
 FastAPI service that turns per-seat sensor readings into public seat states and runs the study
 matching flow on top of them.

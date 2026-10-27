@@ -1,4 +1,4 @@
--- Ghost Seats seed data. Idempotent (ON CONFLICT DO NOTHING).
+-- Synapse seed data. Idempotent (ON CONFLICT DO NOTHING).
 --
 -- PLACEHOLDER (Q2/H0): the physical demo table below uses the example ids from the original
 -- interface contract: node 'table-1', seats 't1-s1', 't1-s2'. Replace them with the hardware
