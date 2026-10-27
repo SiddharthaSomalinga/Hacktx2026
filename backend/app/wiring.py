@@ -8,6 +8,7 @@ from datetime import timedelta
 from app.adapters.ai_fallback import FallbackAI
 from app.adapters.ai_muse import MuseAI
 from app.adapters.clock import SystemClock
+from app.adapters.metrics_prometheus import PrometheusMetrics
 from app.adapters.push_webpush import WebPushNotifier
 from app.adapters.repo_postgres import PostgresRepository
 from app.config import Settings
@@ -53,5 +54,6 @@ def build_services(settings: Settings) -> Services:
         vapid_public_key=settings.vapid_public_key,
         demo_hosts=settings.demo_hosts,
         demo_accept=timedelta(seconds=settings.demo_accept_s),
+        metrics=PrometheusMetrics(settings.prometheus_multiproc_dir),
     )
     return Services.build(ctx)

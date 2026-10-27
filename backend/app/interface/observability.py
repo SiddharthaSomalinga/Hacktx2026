@@ -21,6 +21,8 @@ from typing import Any
 from starlette.datastructures import MutableHeaders
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
+from app.services.metrics import MetricsService
+
 request_id: ContextVar[str | None] = ContextVar("request_id", default=None)
 
 UNMATCHED = "unmatched"  # route label for paths no route matched; keeps labels bounded
@@ -69,10 +71,12 @@ def route_template(scope: Scope) -> str:
 
 
 class RequestContext:
-    """Pure ASGI middleware: assigns the request id, echoes it, writes one access line."""
+    """Pure ASGI middleware: assigns the request id, echoes it, writes one access line and
+    records the request's duration."""
 
-    def __init__(self, app: ASGIApp) -> None:
+    def __init__(self, app: ASGIApp, metrics: MetricsService) -> None:
         self.app = app
+        self.metrics = metrics
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":
@@ -95,8 +99,10 @@ class RequestContext:
         try:
             await self.app(scope, receive, send_with_id)
         finally:
-            elapsed_ms = (time.perf_counter() - started) * 1000
-            method, path = scope["method"], scope["path"]
+            elapsed_s = time.perf_counter() - started
+            elapsed_ms = elapsed_s * 1000
+            method, path, route = scope["method"], scope["path"], route_template(scope)
+            self.metrics.observe_request(method, route, status, elapsed_s)
             access_log.info(
                 "%s %s %d %.1fms",
                 method,
@@ -107,7 +113,7 @@ class RequestContext:
                     "fields": {
                         "method": method,
                         "path": path,
-                        "route": route_template(scope),
+                        "route": route,
                         "status": status,
                         "duration_ms": round(elapsed_ms, 1),
                     }

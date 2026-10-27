@@ -86,6 +86,45 @@ class Notifier(Protocol):
     def send(self, subscription: PushSubscription, payload: Mapping[str, str]) -> PushResult: ...
 
 
+class PushOutcome(StrEnum):
+    """What became of one outbox row in a drain."""
+
+    SENT = "sent"  # every subscription took it, or none were left
+    RETRY = "retry"  # a send failed; the row stays unsent for a later tick
+    GAVE_UP = "gave_up"  # failed PUSH_MAX_ATTEMPTS times
+
+
+class Metrics(Protocol):
+    """What GET /metrics reports (D60). Called from request threads and the worker thread."""
+
+    def observe_request(self, method: str, route: str, status: int, seconds: float) -> None: ...
+    def observe_tick(self, seconds: float, due: int) -> None: ...
+    def count_push(self, outcome: PushOutcome) -> None: ...
+    def count_ai_fallback(self, call: str) -> None: ...
+    def render(self, outbox_unsent: int) -> tuple[bytes, str]:
+        """The exposition and its media type."""
+        ...
+
+
+class NullMetrics:
+    """Records nothing: the default for contexts built without metrics (tests, scripts)."""
+
+    def observe_request(self, method: str, route: str, status: int, seconds: float) -> None:
+        pass
+
+    def observe_tick(self, seconds: float, due: int) -> None:
+        pass
+
+    def count_push(self, outcome: PushOutcome) -> None:
+        pass
+
+    def count_ai_fallback(self, call: str) -> None:
+        pass
+
+    def render(self, outbox_unsent: int) -> tuple[bytes, str]:
+        return b"", "text/plain; charset=utf-8"
+
+
 class OutboxRow(Protocol):
     @property
     def id(self) -> int: ...
@@ -166,6 +205,7 @@ class Tx(Protocol):
     def enqueue(self, messages: Sequence[OutboxMessage], now: datetime) -> None: ...
     def claim_outbox(self, limit: int) -> Sequence[OutboxRow]: ...
     def mark_outbox(self, row_id: int, sent_at: datetime | None, attempts: int) -> None: ...
+    def outbox_unsent(self) -> int: ...
 
     # Scheduler: ids of rows whose time-only deadline has passed
     def due_search_ids(self, now: datetime, human_fresh_before: datetime) -> list[str]: ...

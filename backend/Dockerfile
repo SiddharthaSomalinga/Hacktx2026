@@ -29,9 +29,12 @@ USER ghostseats
 ENV PATH=/app/.venv/bin:$PATH \
     FRONTEND_DIST=/app/frontend-dist \
     WEB_CONCURRENCY=2 \
-    LOG_FORMAT=json
+    LOG_FORMAT=json \
+    PROMETHEUS_MULTIPROC_DIR=/tmp/ghostseats-metrics
 EXPOSE 8000
 HEALTHCHECK --interval=10s --timeout=3s --start-period=20s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=2)"
 # Caddy on the host terminates TLS (D57); trust its X-Forwarded-* headers.
-CMD ["sh", "-c", "exec uvicorn app.main:build --factory --host 0.0.0.0 --port 8000 --workers \"$WEB_CONCURRENCY\" --proxy-headers --forwarded-allow-ips '*' --no-access-log --log-config app/log_config.json"]
+# The metrics directory is emptied on every start: samples from a previous run's processes
+# would otherwise be summed into this one's.
+CMD ["sh", "-c", "rm -rf \"$PROMETHEUS_MULTIPROC_DIR\" && mkdir -p \"$PROMETHEUS_MULTIPROC_DIR\" && exec uvicorn app.main:build --factory --host 0.0.0.0 --port 8000 --workers \"$WEB_CONCURRENCY\" --proxy-headers --forwarded-allow-ips '*' --no-access-log --log-config app/log_config.json"]

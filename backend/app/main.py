@@ -18,6 +18,7 @@ from app.interface.routes import (
     account,
     host,
     matches,
+    metrics,
     public,
     push,
     readings,
@@ -49,6 +50,9 @@ def create_app(settings: Settings, services: Services) -> FastAPI:
     )
     app.state.services = services
     app.state.node_key = settings.node_key.get_secret_value()
+    app.state.metrics_token = (
+        settings.metrics_token.get_secret_value() if settings.metrics_token else None
+    )
 
     app.add_middleware(
         SessionMiddleware,
@@ -57,10 +61,22 @@ def create_app(settings: Settings, services: Services) -> FastAPI:
         same_site="lax",
         https_only=settings.cookie_secure,
     )
-    app.add_middleware(RequestContext)  # added last, so it wraps the session middleware too
+    # Added last, so it wraps the session middleware too.
+    app.add_middleware(RequestContext, metrics=services.metrics)
 
     errors.install(app)
-    for module in (public, readings, account, search, host, requests, matches, safety, push):
+    for module in (
+        public,
+        readings,
+        account,
+        search,
+        host,
+        requests,
+        matches,
+        safety,
+        push,
+        metrics,
+    ):
         app.include_router(module.router)
 
     if settings.frontend_dist:

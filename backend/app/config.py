@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import timedelta
 from functools import lru_cache
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -28,6 +28,10 @@ class Settings(BaseSettings):
     muse_model: str = Field("muse-spark-1.3", min_length=1)
     frontend_dist: str | None = None
     log_format: Literal["text", "json"] = "text"  # the image sets json (D60)
+    # GET /metrics answers only `Authorization: Bearer <this>`; unset, it is a 404 (D60).
+    metrics_token: Annotated[SecretStr, Field(min_length=16)] | None = None
+    # Shared sample directory for uvicorn's worker processes; prometheus_client reads it too.
+    prometheus_multiproc_dir: str | None = None
     cookie_secure: bool = False
     worker_enabled: bool = True
     # Connections per pool per process. Budget: processes x instances x pools x this value must

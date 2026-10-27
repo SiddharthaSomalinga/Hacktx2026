@@ -106,6 +106,7 @@ Transitions re-read their row `FOR UPDATE` and re-check before acting, and parti
 | Database | PostgreSQL 16 + TimescaleDB (hypertable, compression, retention) |
 | AI | Meta Muse Spark, behind a timeout and a rule-based fallback |
 | Frontend | React 19, TypeScript, Vite, MapLibre GL, installable PWA with web push |
+| Observability | JSON logs with a request id per request, Prometheus `/metrics` behind a token |
 | Hosting | Vultr |
 
 ## Run it locally

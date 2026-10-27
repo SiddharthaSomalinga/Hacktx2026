@@ -112,9 +112,24 @@ with self._ctx.repo.tx() as tx:
   8 failed with `Conflict('one pending request per search')`. With the lock, all 8 succeed and
   exactly one request exists (`tests/api/test_postgres_e2e.py`).
 
-The scheduler uses the same functions with `FOR UPDATE SKIP LOCKED`. Ticks on several instances
-split the due rows instead of waiting on each other. Six concurrent ticks over one expired
-request produce one `expired` row and one new `pending` row.
+The scheduler calls the same functions with `FOR UPDATE SKIP LOCKED`, so a tick never waits on
+a search that a request or another instance is advancing; it leaves it for the next tick.
+[CONCURRENCY](../docs/CONCURRENCY.md) lists every concurrency test and the lock each one catches.
+
+## Logs and metrics
+
+- **Logs.** With `LOG_FORMAT=json`, which the image sets, every line is one JSON object,
+  uvicorn's included. Each request gets an id, taken from a plain `X-Request-ID` header or
+  generated, that comes back in the response header and is on every line the request writes.
+  The access line carries the route template (`/api/requests/{request_id}`), status and
+  `duration_ms`.
+- **Metrics.** `GET /metrics` with `Authorization: Bearer $METRICS_TOKEN` returns Prometheus
+  text: request latency by route template and status, scheduler tick duration, push outcomes
+  (`sent`, `retry`, `gave_up`), AI fallbacks by call, and the unsent outbox rows, counted at
+  scrape time. Paths no route matches share the label `unmatched`.
+- **Several processes.** A scrape reaches one uvicorn process. With `PROMETHEUS_MULTIPROC_DIR`
+  set (the image does), every process writes its samples there and each scrape sums them. With
+  2 workers I sent 20 requests and scraped four times: every scrape reported 20.
 
 ## Tests
 
@@ -196,6 +211,8 @@ make deploy HOSTS="root@<ip-1> root@<ip-2>" REF=origin/main
 - **Session cookie.** Signed, `HttpOnly`, `SameSite=Lax`, and `Secure` when
   `COOKIE_SECURE=true`.
 - **Node key.** Compared in constant time; nodes can only write their own seats.
+- **Metrics.** `/metrics` is a 404 unless `METRICS_TOKEN` is set, and then needs that bearer
+  token, compared in constant time.
 - **Failures.**
   - Unexpected errors return a generic 500 with details only in the log.
   - A database outage returns 503 `database_unavailable` within the 5 s pool wait.
