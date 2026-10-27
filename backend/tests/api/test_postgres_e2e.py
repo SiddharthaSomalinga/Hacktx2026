@@ -128,7 +128,7 @@ def test_concurrent_advances_send_exactly_one_request(
     assert tried is not None and tried[0] == 1
 
 
-def test_skip_locked_scheduler_ticks_do_not_collide(
+def test_concurrent_scheduler_ticks_do_not_collide(
     pg: tuple[Services, PostgresRepository, FakeClock, str],
 ) -> None:
     services, _, clock, url = pg
@@ -144,8 +144,8 @@ def test_skip_locked_scheduler_ticks_do_not_collide(
     priya = Phone(app, "priya")
     sid = priya.ok("POST", "/api/search", {"topic_raw": "orgo 1"})["search_id"]
     priya.ok("POST", f"/api/search/{sid}/join")
-    clock.advance(make_settings().request_timeout_s + 1)  # the first request expired; no polling
-    node.post()
+    _expire_pending_request(url, sid, clock)
+    assert _request_statuses(url, sid) == ["pending"]
 
     barrier = threading.Barrier(6)
 
@@ -158,11 +158,25 @@ def test_skip_locked_scheduler_ticks_do_not_collide(
         t.start()
     for t in threads:
         t.join()
-    with psycopg.connect(url) as conn:
-        statuses = sorted(
-            s for (s,) in conn.execute(b"SELECT status FROM requests WHERE search_id = %s", (sid,))
+    # One expiry, one new request, no duplicates.
+    assert _request_statuses(url, sid) == ["expired", "pending"]
+
+
+def _expire_pending_request(url: str, search_id: str, clock: FakeClock) -> None:
+    """Makes the pending request due while its host is still present. Advancing the clock
+    instead needs a node post to keep the host present, and that ingest advances the search
+    itself (advance_session), so a tick would find nothing to do."""
+    with psycopg.connect(url, autocommit=True) as conn:
+        conn.execute(
+            b"UPDATE requests SET expires_at = %s WHERE search_id = %s AND status = 'pending'",
+            (clock.now() - timedelta(seconds=1), search_id),
         )
-    assert statuses == ["expired", "pending"]  # one expiry, one new request, no duplicates
+
+
+def _request_statuses(url: str, search_id: str) -> list[str]:
+    with psycopg.connect(url) as conn:
+        rows = conn.execute(b"SELECT status FROM requests WHERE search_id = %s", (search_id,))
+        return sorted(s for (s,) in rows)
 
 
 class GatedNotifier(FakeNotifier):
