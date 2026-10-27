@@ -1,8 +1,12 @@
 # Synapse
 
+[![CI](https://github.com/SiddharthaSomalinga/Hacktx2026/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/SiddharthaSomalinga/Hacktx2026/actions/workflows/ci.yml)
+
 A library seat map fed by desk sensors, with study-partner matching on top. Every seat reading carries `object_present` and `human_present`. A pure state machine in the backend turns them into one of four public states: `open`, `occupied`, `likely_opening` (belongings left with nobody there for 30 s, a "ghost seat"), or `offline`. Students studying the same course can then request an open spot at a host's table. Readings are stored change-only in TimescaleDB, and seat transitions run under `SELECT … FOR UPDATE`, so several API instances can share one database.
 
-Built by 4 people at HackTX 2026, Sat 6 pm → Sun 11:30 am. The tag [`hacktx-2026`](https://github.com/SiddharthaSomalinga/Hacktx2026/tree/hacktx-2026) is what we demoed at 11:30 Sunday; this branch has changed since (docs and cleanup).
+Built by 4 people at HackTX 2026, Sat 6 pm → Sun 11:30 am. The tag [`hacktx-2026`](https://github.com/SiddharthaSomalinga/Hacktx2026/tree/hacktx-2026) is what we demoed at 11:30 Sunday; `main` has changed since (docs, layout, CI).
+
+**Live:** <https://64.177.55.143.sslip.io>. Pick a demo user, search a course such as "macro econ" and tap Join; a simulated host (D56) accepts in about 5 s and the match shows where to go.
 
 | Campus map and demo login | Live floor plan | Study-partner match |
 |:---:|:---:|:---:|
@@ -142,9 +146,17 @@ Real hardware: flash `firmware/HACKATHON`, plug in the Arduino, then from the re
 - The frontend polls every 3 s; there is no WebSocket.
 - Demo hosts are simulated, and there is no real account system: sign-in is a demo-user picker.
 
-## Docs
+## Design
 
-[ARCHITECTURE](docs/ARCHITECTURE.md) (layers, state machines, push, scaling) · [REQUIREMENTS](docs/REQUIREMENTS.md) (FR/NFR ids, API contract) · [USER_FLOWS](docs/USER_FLOWS.md) · [backend README](backend/README.md)
+| Doc | Covers |
+|---|---|
+| [ARCHITECTURE](docs/ARCHITECTURE.md) | Layers, the four state machines, push, scaling to several instances |
+| [REQUIREMENTS](docs/REQUIREMENTS.md) | FR/NFR ids, the API contract, config keys, the data model |
+| [USER_FLOWS](docs/USER_FLOWS.md) | Every screen and what the user can do on it |
+| [TESTING](docs/TESTING.md) | Features with manual test steps |
+| [backend README](backend/README.md) | Running, testing and deploying the API |
+
+[PLAN](docs/PLAN.md) (decisions D1–D59, open questions) and [PROGRESS](docs/PROGRESS.md) (what was run, per session) are the build log.
 
 ## Team
 
