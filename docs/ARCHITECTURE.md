@@ -100,6 +100,7 @@ and an import-guard test enforces that.
 | `adapters/ai_fallback.py`, `ai_muse.py` | `TopicAI` implementations (§8) | NFR-3 |
 | `adapters/push_webpush.py` | `Notifier` over `pywebpush` | FR-51..53 |
 | `interface/routes/*.py` | Parse, call one service, return. No business `if`s | §7 |
+| `interface/observability.py` | Request id per request (echoed as `X-Request-ID`), one access line with the route template, JSON log lines when `LOG_FORMAT=json` (D60) | — |
 
 **Ports and fakes (D3).** `Repository` has two implementations,
 `PostgresRepository` and `InMemoryRepository` (`tests/fakes.py`). Both pass

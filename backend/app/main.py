@@ -2,19 +2,18 @@
 
 from __future__ import annotations
 
-import logging
-import time
-from collections.abc import AsyncIterator, Awaitable, Callable
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.config import Settings, get_settings
 from app.interface import errors
+from app.interface.observability import RequestContext, configure_logging
 from app.interface.routes import (
     account,
     host,
@@ -28,8 +27,6 @@ from app.interface.routes import (
 )
 from app.services.container import Services
 from app.worker import Worker
-
-log = logging.getLogger("ghostseats.http")
 
 
 def create_app(settings: Settings, services: Services) -> FastAPI:
@@ -60,18 +57,7 @@ def create_app(settings: Settings, services: Services) -> FastAPI:
         same_site="lax",
         https_only=settings.cookie_secure,
     )
-
-    @app.middleware("http")
-    async def access_log(
-        request: Request, call_next: Callable[[Request], Awaitable[Response]]
-    ) -> Response:
-        started = time.perf_counter()
-        response = await call_next(request)
-        elapsed_ms = (time.perf_counter() - started) * 1000
-        log.info(
-            "%s %s %d %.1fms", request.method, request.url.path, response.status_code, elapsed_ms
-        )
-        return response
+    app.add_middleware(RequestContext)  # added last, so it wraps the session middleware too
 
     errors.install(app)
     for module in (public, readings, account, search, host, requests, matches, safety, push):
@@ -103,6 +89,6 @@ def build() -> FastAPI:
     """Entry point for uvicorn: `uvicorn app.main:build --factory`."""
     from app.wiring import build_services
 
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
     settings = get_settings()
+    configure_logging(settings.log_format)
     return create_app(settings, build_services(settings))
