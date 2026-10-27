@@ -173,7 +173,7 @@ bash provision.sh https://github.com/SiddharthaSomalinga/Hacktx2026.git
 # then fill /etc/ghostseats.env (mode 600) from .env.example, with COOKIE_SECURE=true
 
 # from backend/ on your laptop, for any commit already pushed
-make deploy HOSTS="root@<ip-1> root@<ip-2>" REF=origin/v1final FRONTEND_DIR=.
+make deploy HOSTS="root@<ip-1> root@<ip-2>" REF=origin/main
 ```
 
 - **Rolling.** `deploy.sh` updates one host at a time and waits for its container health check
@@ -181,12 +181,10 @@ make deploy HOSTS="root@<ip-1> root@<ip-2>" REF=origin/v1final FRONTEND_DIR=.
 - **A failed host stops the rollout.** I tested it with an empty `SECRET_KEY`. The config check
   kills uvicorn's workers, the container never turns healthy, and the script prints the last
   50 log lines and exits. The other host keeps serving the old commit. The broken host stays
-  broken until the next deploy; the load balancer takes it out of rotation.
-- **A short gap per host.** While a container restarts, the load balancer can still send it
-  traffic until its own health check notices (up to interval × threshold). Expect a few failed
-  requests per deploy.
-- **`make image`** builds the same image locally. The frontend sits at the repo root on
-  `v1frontend` until F0 moves it, so pass `FRONTEND_DIR=.` until then.
+  broken until the next deploy.
+- **A short gap per host.** There is no load balancer (D57): each server is reached at its own
+  address, so the one being restarted is unreachable for a few seconds.
+- **`make image`** builds the same image locally, with the frontend from `frontend/`.
 
 ## Security
 

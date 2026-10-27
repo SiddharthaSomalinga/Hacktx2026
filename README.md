@@ -109,9 +109,10 @@ make db-init seed policies seed-history
 make dev                      # API on :8000, live contract at /docs
 ```
 
-In a second terminal, from the repo root:
+In a second terminal:
 
 ```bash
+cd frontend
 npm ci
 npm run dev                   # http://localhost:5173, proxies /api to :8000
 ```
@@ -128,8 +129,8 @@ Real hardware: flash `firmware/HACKATHON`, plug in the Arduino, then from the re
 |---|---|
 | `cd backend && make check` | ruff, mypy `--strict`, 184 passed, 29 skipped (Postgres tests skip without a DB) |
 | `cd backend && make test-db` | 213 passed, including the Postgres repository contract tests |
-| `npm test` | 32 passed (Vitest) |
-| `npm run build` | type-checks the app and service worker, builds the PWA |
+| `cd frontend && npm test` | 32 passed (Vitest) |
+| `cd frontend && npm run build` | type-checks the app and service worker, builds the PWA |
 
 `InMemoryRepository` and `PostgresRepository` pass the same contract suite in `backend/tests/repo_contract/`. `make load-check` runs 500 polling clients and 50 fake nodes against a running API.
 

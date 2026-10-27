@@ -35,7 +35,7 @@ is the node's local fallback (HW-5).
 | Arduino UNO R4 | — | Samples every 500 ms (HW-1), drives the LEDs, speaks the serial protocol |
 | Raspberry Pi | — | Runs `bridge/`; serial ⇄ HTTPS (HW-7..10) |
 
-## 2. Repository layout (target)
+## 2. Repository layout
 
 ```
 /
@@ -58,7 +58,7 @@ is the node's local fallback (HW-5).
 │   └── pyproject.toml · uv.lock · Makefile · .env.example · .gitignore
 ├── bridge/                    # arduino_bridge.py: serial ⇄ POST /api/readings, env config (D39)
 ├── firmware/                  # HACKATHON/HACKATHON.ino: one IR sensor (Q14) (D39)
-└── frontend/                  # Vite + React + PWA; still at the repo root on v1final (D6, D40)
+└── frontend/                  # Vite + React + PWA (D6)
 ```
 
 ## 3. Backend layers
