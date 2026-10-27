@@ -7,13 +7,13 @@ numbers (`D18`, see the decision log in `PLAN.md`) instead of restating them.
 ## 1. System at a glance
 
 ```
- seat: micro switch (object) + HC-05 link (human) + LED
+ seat: one IR sensor + two LEDs (as built, Q14)
         │ digital pins
  ┌──────▼───────┐  USB serial 115200   ┌──────────────┐  HTTPS + X-Node-Key  ┌──────────────────────────┐
- │ Arduino R4   │ ── R,10,00 ────────► │ Raspberry Pi │ ─ POST /api/readings►│ Backend (FastAPI) × N    │
- │ firmware/    │ ◄─ L,Y,G ─────────── │ bridge/      │ ◄─ {leds:{…}} ───────│ backend/                 │
- └──────────────┘  (REQUIREMENTS §10.3)└──────────────┘    every 2 s         │ engine · matching · AI   │
-   local mode after 10 s silence (HW-5)                                      │ scheduler tick · outbox  │
+ │ Arduino      │ ─ occupied: true ──► │ laptop       │ ─ POST /api/readings►│ Backend (FastAPI) × N    │
+ │ firmware/    │                      │ bridge/      │ ◄─ {leds:{…}} ───────│ backend/                 │
+ └──────────────┘                      └──────────────┘  change + heartbeat  │ engine · matching · AI   │
+   LEDs follow the IR reading                                                │ scheduler tick · outbox  │
                                                                              └──┬──────────▲─────────┬──┘
                                                          SQL (primary + read)   │          │ JSON    │ web push
                                                                  ┌──────────────▼───┐ ┌────┴───────┐ │ (VAPID)
@@ -23,8 +23,9 @@ numbers (`D18`, see the decision log in `PLAN.md`) instead of restating them.
                                                                  └──────────────────┘ └────────────┘
 ```
 
-The backend is the single source of truth for seat state. The only exception
-is the node's local fallback (HW-5).
+The backend is the single source of truth for seat state. As built, the firmware's
+LEDs follow its own IR reading and the bridge only logs the `leds` the backend returns
+(Q21); the serial protocol in REQUIREMENTS §10.3 was never implemented.
 
 ### Hardware parts
 
@@ -325,13 +326,13 @@ class TopicAI(Protocol):                     # services/ports.py
 - **Seeding.** `scripts/seed_history.py` writes change-only rows for seats with no readings in the window. It never deletes, so it is safe on a live database.
 - **Verification.** The repository conformance suite runs the same scenarios against the in-memory reference and against Postgres (including carry-in from before the window, silent-seat capping and the partial current hour). That suite caught two SQL bugs the in-memory tests could not (PROGRESS, Session 3).
 
-## 11. Deployment topology (D5, D32)
+## 11. Deployment topology (D5, D32, D57)
 
 ```
- phones / PWA ──HTTPS──► load balancer ──► FastAPI × N (API + frontend/dist + worker thread each)
- Pi bridge ──HTTPS + X-Node-Key──┘                 │ primary: writes, locks      │ read URL: map, history, recommend
-                                                   ▼                             ▼
-                                             Tiger Data primary ───────► read replica (optional)
+ phones / PWA ──HTTPS──► Caddy :443 ──► FastAPI container (API + frontend/dist + worker thread)
+ bridge ──HTTPS + X-Node-Key──┘         │ primary: writes, locks      │ read URL: map, history, recommend
+ (server 2: the same stack at           ▼                             ▼
+  its own address, hot backup)   Tiger Data primary ───────► read replica (optional)
  dev:  Vite :5173 ──proxy /api──► uvicorn :8000
 ```
 
@@ -339,12 +340,12 @@ class TopicAI(Protocol):                     # services/ports.py
 - **N instances** are safe because no state of record lives in memory (NFR-8). The scheduler uses `SKIP LOCKED` (§14), and caches are derived (§5).
 - **Connection budget (D34).** Every process opens a primary pool of `DB_POOL_SIZE` (default 5), plus a replica pool when `DATABASE_READ_URL` is set. Processes × instances × pools × `DB_POOL_SIZE` must stay below the database's `max_connections`. The local Timescale image allows 25, and 4 workers × 5 peaked at exactly 20 under load.
 - **Outages (D35).** Connection failures become `Unavailable` in the repository and a 503 `database_unavailable` with `Retry-After: 5` at the API, after at most the 5 s pool wait. `/api/health` reports `db: false`.
-- **Host (D36, D37).** Two Vultr Cloud Compute instances in New Jersey behind a Vultr Load Balancer (Auto SSL, health check `GET /api/health`), on a `.tech` domain whose DNS is on Vultr. Deploys roll one instance at a time. Fallback: a laptop behind a `cloudflared` tunnel.
-- **Network.** The Pi and the phones use the public URL. A phone hotspot is the backup network.
+- **Host (D57, replacing D36's load balancer and D37's domain).** Two Vultr instances (1 vCPU, 2 GB, 2 GB swap), each running the same image from `backend/deploy/compose.yaml` with Caddy in front for HTTPS (Let's Encrypt on `<ip>.sslip.io`). Server 1 is the public URL; server 2 is a hot backup at its own address, so failing over means changing the URL. `deploy.sh` updates one server at a time and waits for the container health check before the next.
+- **Network.** The bridge and the phones use the public URL. A phone hotspot is the backup network.
 
 ## 12. Frontend architecture (v2, `v2-frontendredo`, D44–D52)
 
-React 19, TypeScript strict, Vite 8, at the repo root (D6). One `src/api/client.ts` makes every
+React 19, TypeScript strict, Vite 8, in `frontend/` (D6, D59). One `src/api/client.ts` makes every
 request: same origin, cookies, `cache: 'no-store'`, `{error, message}` → `ApiError`, and an ETag
 store that sends `If-None-Match` on the two buildings endpoints. API types are generated from the
 live OpenAPI (`npm run api:types` → `src/api/schema.gen.ts`).
