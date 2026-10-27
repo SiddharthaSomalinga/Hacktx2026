@@ -395,6 +395,7 @@ worker thread (each instance, `app/worker.py`):
 
 - **Transactional outbox.** The notification row commits with the transition, so a push failure never rolls back a state change and a committed transition is never missing its notification.
 - **`SKIP LOCKED`** means N instances never pick the same row. Duplicates are impossible within one outbox row.
+- **Failure cases and the tests behind them:** [CONCURRENCY.md](CONCURRENCY.md).
 - **Payloads** (`domain/notifications.py`):
   - `request_received`: the seeker's first name and major, the course and the host's table label (D43).
   - `request_accepted`: the host's first name, allowed after accept (FR-43).

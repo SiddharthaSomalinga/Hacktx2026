@@ -79,6 +79,23 @@ A host taps their seat (or scans its QR code) and types what they're studying, e
 
 Each call has a 4 s timeout (`AI_TIMEOUT_S`) and a deterministic fallback, and none runs inside a database lock, so a slow or failed AI call never blocks a request. Before a host accepts, the seeker sees only first name and major; the seat location is revealed after accept. Names are never sent to Muse.
 
+## Running several instances
+
+Each instance runs its own scheduler tick and push sender against the shared database, so Postgres does the coordinating. The push sender claims its work with:
+
+```sql
+SELECT id, user_id, kind, payload, attempts FROM notification_outbox
+WHERE sent_at IS NULL ORDER BY id LIMIT %s FOR UPDATE SKIP LOCKED
+```
+
+- `sent_at IS NULL` is the queue: a row leaves it when its sender commits.
+- `FOR UPDATE` keeps a claimed row away from every other sender until that commit.
+- `SKIP LOCKED` sends the other senders to the next free rows rather than making them wait.
+- The push goes out before the commit. A process that dies between the two leaves the row unsent, and another sender pushes it again: at-least-once.
+- The row itself was inserted in the same transaction as the state change behind it, so a push that fails never undoes a transition.
+
+Transitions re-read their row `FOR UPDATE` and re-check before acting, and partial unique indexes (one pending request per search, one active match per person) refuse a duplicate even if a lock were missing. [CONCURRENCY](docs/CONCURRENCY.md) covers each mechanism and the five Postgres tests that fail when its lock is removed.
+
 ## Stack
 
 | Part | Choice |
@@ -154,6 +171,7 @@ Real hardware: flash `firmware/HACKATHON`, plug in the Arduino, then from the re
 | Doc | Covers |
 |---|---|
 | [ARCHITECTURE](docs/ARCHITECTURE.md) | Layers, the four state machines, push, scaling to several instances |
+| [CONCURRENCY](docs/CONCURRENCY.md) | Row locks, `SKIP LOCKED`, the outbox, and the tests that fail without them |
 | [REQUIREMENTS](docs/REQUIREMENTS.md) | FR/NFR ids, the API contract, config keys, the data model |
 | [USER_FLOWS](docs/USER_FLOWS.md) | Every screen and what the user can do on it |
 | [TESTING](docs/TESTING.md) | Features with manual test steps |
