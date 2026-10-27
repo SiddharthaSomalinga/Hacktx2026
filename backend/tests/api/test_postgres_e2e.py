@@ -16,7 +16,7 @@ from app.domain.types import OutboxKind, OutboxMessage, Reading
 from app.main import create_app
 from app.services.container import Services
 from app.services.context import Context
-from app.services.ports import PushResult, PushSubscription
+from app.services.ports import Lock, PushResult, PushSubscription
 from tests.api.harness import BAG, PERSON, Node, Phone
 from tests.conftest import make_settings
 from tests.fakes import FakeClock, FakeNotifier
@@ -159,6 +159,43 @@ def test_concurrent_scheduler_ticks_do_not_collide(
     for t in threads:
         t.join()
     # One expiry, one new request, no duplicates.
+    assert _request_statuses(url, sid) == ["expired", "pending"]
+
+
+def test_a_tick_skips_a_search_another_transaction_holds(
+    pg: tuple[Services, PostgresRepository, FakeClock, str],
+) -> None:
+    """SKIP LOCKED keeps a tick from queueing behind a request handler (or another instance)
+    that is advancing the same search; the row is left for a later tick."""
+    services, repo, clock, url = pg
+    app = create_app(make_settings(map_cache_s=0), services)
+    node = Node(app, clock)
+    for seat in ("s1", "s2"):
+        node.set(seat, PERSON)
+    node.post()
+    for user, seat in (("alex", "s1"), ("jordan", "s2")):
+        p = Phone(app, user)
+        p.ok("POST", "/api/host/link", {"seat_id": seat})
+        p.ok("POST", "/api/host/topic", {"topic_raw": "orgo 1"})
+    priya = Phone(app, "priya")
+    sid = priya.ok("POST", "/api/search", {"topic_raw": "orgo 1"})["search_id"]
+    priya.ok("POST", f"/api/search/{sid}/join")
+    _expire_pending_request(url, sid, clock)
+
+    ticked = threading.Event()
+
+    def tick() -> None:
+        services.scheduler.tick()
+        ticked.set()
+
+    with repo.tx() as tx:
+        assert tx.search(sid, Lock.WAIT) is not None
+        thread = threading.Thread(target=tick)
+        thread.start()
+        assert ticked.wait(1.0)  # the tick did not wait for this transaction
+        assert _request_statuses(url, sid) == ["pending"]  # and left the search alone
+    thread.join()
+    services.scheduler.tick()
     assert _request_statuses(url, sid) == ["expired", "pending"]
 
 
