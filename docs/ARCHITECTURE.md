@@ -49,7 +49,8 @@ IR for `object_present`. Nothing in the backend changes for it.
 
 ```
 /
-├── docs/                      # REQUIREMENTS · USER_FLOWS · ARCHITECTURE · PLAN · PROGRESS
+├── compose.yaml · Makefile    # `docker compose up` / `make demo`: the whole stack locally (D60)
+├── docs/                      # REQUIREMENTS · USER_FLOWS · ARCHITECTURE · CONCURRENCY · PLAN · PROGRESS
 ├── backend/                   # FastAPI service (backend role, v1backend)
 │   ├── app/
 │   │   ├── main.py            # create_app(settings, services); static mount of frontend/dist
@@ -61,9 +62,9 @@ IR for `object_present`. Nothing in the backend changes for it.
 │   │   ├── adapters/          # repo_postgres, history_sql, ai_fallback, push_webpush, metrics_prometheus, db, clock
 │   │   └── interface/         # schemas.py (the contract), deps.py, errors.py, routes/
 │   ├── sql/                   # schema.sql, seed.sql
-│   ├── scripts/               # db, fake_node, seed_history, seat_qr, vapid_keys, load_check
+│   ├── scripts/               # db, fake_node, seed_history, seat_qr, vapid_keys, load_check, demo_env
 │   ├── tests/                 # domain/, api/, repo_contract/, fakes.py (in-memory repository)
-│   ├── deploy/                # compose.yaml, provision.sh, deploy.sh (rolling, D36)
+│   ├── deploy/                # compose.yaml, provision.sh, deploy.sh (rolling, D36), entrypoint.sh
 │   ├── Dockerfile             # API + worker + frontend/dist; built from the repo root
 │   └── pyproject.toml · uv.lock · Makefile · .env.example · .gitignore
 ├── bridge/                    # arduino_bridge.py: serial ⇄ POST /api/readings, env config (D39)
@@ -336,6 +337,7 @@ class TopicAI(Protocol):                     # services/ports.py
  (server 2: the same stack at           ▼                             ▼
   its own address, hot backup)   Tiger Data primary ───────► read replica (optional)
  dev:  Vite :5173 ──proxy /api──► uvicorn :8000
+ demo: compose.yaml ── db (Timescale) · init (schema, seed, keys) · api (the deploy image)
 ```
 
 - **One origin.** The session cookie stays SameSite=Lax with no CORS, and the service worker scope covers the app.

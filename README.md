@@ -109,9 +109,19 @@ Transitions re-read their row `FOR UPDATE` and re-check before acting, and parti
 | Observability | JSON logs with a request id per request, Prometheus `/metrics` behind a token |
 | Hosting | Vultr |
 
+## Try it
+
+With Docker, from the repo root:
+
+```bash
+docker compose up --build     # same as: make demo
+```
+
+Then open <http://localhost:8000> (or set `PORT=8001` first if 8000 is taken). The first start pulls the 3.2 GB database image and builds the app image. A one-shot `init` job creates the schema, seeds three buildings with a day of history and one demo host per course, and generates the keys into a Docker volume. Demo hosts are on, so a search and Join ends in a match with nobody else around. To act as the sensor, run `docker compose run --rm fake-node` in a second terminal and type `1 p`, `1 b` or `1 e`. `docker compose down -v` deletes the data and the keys.
+
 ## Run it locally
 
-You need [uv](https://docs.astral.sh/uv/) (it installs Python 3.12), Docker, `make`, and Node 22 or 24 with the npm that ships with it (npm 10+). The database image is 3.2 GB.
+For development, run each piece on its own. You need [uv](https://docs.astral.sh/uv/) (it installs Python 3.12), Docker, `make`, and Node 22 or 24 with the npm that ships with it (npm 10+). The database image is 3.2 GB.
 
 ```bash
 cd backend
