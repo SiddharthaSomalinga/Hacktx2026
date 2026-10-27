@@ -1,0 +1,11 @@
+# Override for the browser test (frontend/e2e): the request must reach the real host, so demo
+# hosts are off, and a reading counts at once. NODE_KEY comes from the environment so the test
+# can post readings; it only takes effect on a fresh state volume (docker compose down -v).
+services:
+  init:
+    environment:
+      NODE_KEY: ${NODE_KEY:?set NODE_KEY for the e2e stack}
+  api:
+    environment:
+      DEMO_HOSTS: "false"
+      DEBOUNCE_S: "0"

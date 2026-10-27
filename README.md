@@ -166,6 +166,7 @@ Real hardware: flash `firmware/HACKATHON`, plug in the Arduino, then from the re
 | `cd backend && make test-db` | 213 passed, including the Postgres repository contract tests |
 | `cd frontend && npm test` | 32 passed (Vitest) |
 | `cd frontend && npm run build` | type-checks the app and service worker, builds the PWA |
+| `cd frontend && npm run e2e` | Playwright, two browser sessions against the compose stack: a request, the host's accept, and the table appearing for the seeker only after it ([TESTING](docs/TESTING.md#automated-checks)) |
 
 `InMemoryRepository` and `PostgresRepository` pass the same contract suite in `backend/tests/repo_contract/`. `make load-check` runs 500 polling clients and 50 fake nodes against a running API.
 
