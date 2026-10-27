@@ -12,6 +12,6 @@
 **/.ruff_cache
 **/.mypy_cache
 **/.DS_Store
-documentation
+docs
 backend/tests
 backend/out

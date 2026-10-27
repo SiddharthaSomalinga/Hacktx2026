@@ -14,8 +14,8 @@ matching flow on top of them.
 - **Guarantees.** At most one pending request per search, and one active match per host and per
   seeker. Push delivery is at-least-once.
 
-What it must do is specified in `../documentation/REQUIREMENTS.md`; how it is built is in
-`../documentation/ARCHITECTURE.md`.
+What it must do is specified in `../docs/REQUIREMENTS.md`; how it is built is in
+`../docs/ARCHITECTURE.md`.
 
 ## Stack
 

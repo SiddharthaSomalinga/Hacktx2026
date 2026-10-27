@@ -58,7 +58,7 @@ def public_state(s: SeatState, now: datetime, t: Timers) -> PublicState:
 - The away duration is used here and never returned by the API.
 - `now` and the timers are parameters. The domain layer has no clock, database or env access, and a test fails if it imports one.
 
-Every threshold lives in [`backend/app/config.py`](backend/app/config.py) and can be overridden by env var. Transitions happen when a seat is read, when its node reports, or on a 2 s scheduler tick; the tick selects due rows `FOR UPDATE SKIP LOCKED`, so every instance can run the tick. The full state machines (seat, host, request, match) are in [ARCHITECTURE](documentation/ARCHITECTURE.md).
+Every threshold lives in [`backend/app/config.py`](backend/app/config.py) and can be overridden by env var. Transitions happen when a seat is read, when its node reports, or on a 2 s scheduler tick; the tick selects due rows `FOR UPDATE SKIP LOCKED`, so every instance can run the tick. The full state machines (seat, host, request, match) are in [ARCHITECTURE](docs/ARCHITECTURE.md).
 
 ## Matching
 
@@ -144,7 +144,7 @@ Real hardware: flash `firmware/HACKATHON`, plug in the Arduino, then from the re
 
 ## Docs
 
-[ARCHITECTURE](documentation/ARCHITECTURE.md) (layers, state machines, push, scaling) · [REQUIREMENTS](documentation/REQUIREMENTS.md) (FR/NFR ids, API contract) · [USER_FLOWS](documentation/USER_FLOWS.md) · [backend README](backend/README.md)
+[ARCHITECTURE](docs/ARCHITECTURE.md) (layers, state machines, push, scaling) · [REQUIREMENTS](docs/REQUIREMENTS.md) (FR/NFR ids, API contract) · [USER_FLOWS](docs/USER_FLOWS.md) · [backend README](backend/README.md)
 
 ## Team
 

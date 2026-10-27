@@ -39,7 +39,7 @@ is the node's local fallback (HW-5).
 
 ```
 /
-├── documentation/             # REQUIREMENTS · USER_FLOWS · ARCHITECTURE · PLAN · PROGRESS
+├── docs/                      # REQUIREMENTS · USER_FLOWS · ARCHITECTURE · PLAN · PROGRESS
 ├── backend/                   # FastAPI service (backend role, v1backend)
 │   ├── app/
 │   │   ├── main.py            # create_app(settings, services); static mount of frontend/dist

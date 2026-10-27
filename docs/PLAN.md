@@ -15,7 +15,7 @@ Who builds what, in what order, and why. Requirement ids refer to
 
 | Role | Who | Owns | Branch |
 |---|---|---|---|
-| Backend | Manideep | `backend/`, `documentation/` | `v1backend` |
+| Backend | Manideep | `backend/`, `docs/` | `v1backend` |
 | Frontend | Software partner | The web app and PWA (`frontend/` after D6) | `v1frontend` |
 | Hardware | Hardware pair | `firmware/`, `bridge/`, the physical demo table | `Arduino/Transmitter-Code`; UI and bridge work went to `v1hardsoft`, now `v1final` |
 
