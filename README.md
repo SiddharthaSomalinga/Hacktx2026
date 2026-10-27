@@ -1,209 +1,150 @@
-# Synapse (Ghost Seats)
+# Synapse
 
-> **Real-time IoT library desk occupancy sensing that eliminates ghost seats, paired with AI-driven study partner matching.**
-> *Built for HackTX 2026 at The University of Texas at Austin.*
+A library seat map fed by desk sensors, with study-partner matching on top. Every seat reading carries `object_present` and `human_present`. A pure state machine in the backend turns them into one of four public states: `open`, `occupied`, `likely_opening` (belongings left with nobody there for 30 s, a "ghost seat"), or `offline`. Students studying the same course can then request an open spot at a host's table. Readings are stored change-only in TimescaleDB, and seat transitions run under `SELECT … FOR UPDATE`, so several API instances can share one database.
 
----
+Built by 4 people at HackTX 2026, Sat 6 pm → Sun 11:30 am. The tag [`hacktx-2026`](https://github.com/SiddharthaSomalinga/Hacktx2026/tree/hacktx-2026) is what we demoed at 11:30 Sunday; this branch has changed since (docs and cleanup).
 
-## 📸 Overview & Live Application
-
-| Campus Availability & Login | Live Floorplan & "Best Seat" | Meta AI Study Host Matching |
+| Campus map and demo login | Live floor plan | Study-partner match |
 |:---:|:---:|:---:|
-| <img src="docs/images/campus_map_login.png" width="280" alt="Campus Map & Demo Login"/> | <img src="docs/images/floorplan_live_seats.png" width="280" alt="Live Floorplan Grid"/> | <img src="docs/images/host_study_match.png" width="280" alt="Host Study Match View"/> |
-| **Real-time library density** across PCL, Welch, and GDC | **Dynamic desk occupancy**: Blue = Vacant, Green = Occupied | **Course matching & icebreakers** powered by Meta AI |
+| <img src="docs/images/campus_map_login.png" width="260" alt="Campus map and demo login"/> | <img src="docs/images/floorplan_live_seats.png" width="260" alt="Live floor plan"/> | <img src="docs/images/host_study_match.png" width="260" alt="Host study match"/> |
+| Open-seat share across PCL, Welch and GDC | Green = open, blue = occupied, yellow = likely opening, grey = offline | Course match and an icebreaker from Muse |
 
----
+## Real vs. simulated
 
-## 💡 The Problem: "Ghost Seats" & Campus Isolation
-
-Walking into campus study spaces like the **PCL**, **Welch Hall**, or the **GDC** during midterms and finals can feel impossible. But the most frustrating part isn't a truly full library—it is **"ghost seats"**:
-1. **False Reservations:** Desks hogged for hours by an unattended backpack, laptop, or jacket while students wander the halls looking for an empty chair.
-2. **Cold-Start Social Friction:** Students studying difficult subjects alone often want a study partner, but approaching a stranger is intimidating (*"Is this seat saved? Are they studying what I'm studying? What do I say?"*).
-
-**Synapse** solves both by connecting physical desk IoT hardware with a live digital seat map and generative AI.
-
----
-
-## 🛠️ Hardware Setup & Campus Table Deployment
-
-### Proposed Campus Library Desk Installation
-
-Below is the production deployment architecture for standard university study carrels and tables:
-
-<p align="center">
-  <img src="docs/images/campus_desk_setup.jpg" width="100%" alt="Production Campus Desk Hardware Setup Diagram"/>
-</p>
-
-### Physical Implementation Details
-
-```
-+---------------------------------------------------------------------------------+
-|                                CAMPUS STUDY DESK                                |
-|                                                                                 |
-|   [ Desk Surface ]                                                              |
-|   +-------------------------------------------------------------------------+   |
-|   |  Seat 1                                            Seat 2               |   |
-|   |  [QR Sticker]   [LED Indicator Bar]    [LED Indicator Bar] [QR Sticker] |   |
-|   |   (Check-in)     (Blue/Green Glow)      (Blue/Green Glow)   (Check-in)  |   |
-|   |                                                                         |   |
-|   |  [Object Sensor]                                   [Object Sensor]      |   |
-|   |  (Optical/IR)                                      (Optical/IR)         |   |
-|   +-------------------------------------------------------------------------+   |
-|                                                                                 |
-|   [ Under-Desk Housing ]                                                        |
-|   +--------------------------+               +--------------------------+       |
-|   | [Human Presence Sensor]  |               | [Human Presence Sensor]  |       |
-|   | (Aimed at Chair Cushion) |               | (Aimed at Chair Cushion) |       |
-|   +------------+-------------+               +------------+-------------+       |
-|                |                                          |                     |
-|                +--------------------+---------------------+                     |
-|                                     |                                           |
-|                           [Under-Desk IoT Hub]                                  |
-|                       (Arduino / ESP32 Controller)                              |
-|                                     |                                           |
-|                       [Telemetry to Bridge / Cloud]                             |
-+-------------------------------------+-------------------------------------------+
-```
-
-### Prototype Hardware Implementation
-
-Our functioning hackathon prototype uses an **Arduino board with a Grove sensor shield**, digital optical IR sensors, and dual-color LED indicators:
-
-<p align="center">
-  <img src="docs/images/hardware_prototype.jpg" width="600" alt="Arduino Prototype Hardware Setup"/>
-</p>
-
-* **IR Human Seating Sensor:** Mounted beneath the desk edge, focused on the chair seat to detect actual student presence.
-* **IR Object Sensor:** Aimed at the desk surface to detect left-behind laptops, notebooks, or bags.
-* **Dual-Color Status LED:**
-  * 🔵 **Blue (`#3b82f6`):** Seat is **Vacant** and ready for use.
-  * 🟢 **Light Green (`#22c55e`):** Seat is **Occupied**.
-  * ⚡ **Pulsing Blue Beacon:** Activated when a matched study partner is walking over, guiding them straight to your table.
-* **Local Serial Pipeline:** Arduino streams JSON sensor frames over USB at 115200 baud to `arduino_bridge.py`, which authenticates against the backend via `X-Node-Key`.
-
----
-
-## 🧠 The "Ghost Seat" State Engine
-
-How does Synapse distinguish a quick bathroom break from an abandoned seat hog?
-
-```mermaid
-stateDiagram-v2
-    [*] --> Vacant: Sensor detects nothing
-    Vacant --> Occupied: Person sits down
-    Occupied --> Away: Person leaves, backpack stays
-    Away --> Occupied: Person returns within 30s
-    Away --> LikelyOpening: Away > 30s (GHOST_S threshold)
-    LikelyOpening --> Vacant: Staff / student reclaims space
-    Occupied --> Vacant: Person leaves and takes belongings
-```
-
-### State Resolution Rules
-* **Debounce Window (`DEBOUNCE_S = 1s`):** Filters out physical sensor noise, jitter, and students fidgeting in their chairs.
-* **Ghost Timer (`GHOST_S = 30s` in demo):** If an object remains on the desk but no human is detected for $\ge 30\text{ seconds}$, the seat transitions from `Occupied` to `Likely Opening` on the live map.
-* **Privacy by Design:** Away durations are calculated entirely in memory on the server and never broadcasted. Nobody can track another student's exact absence timestamps.
-
----
-
-## 🤖 Meta AI Collaboration & "Host Mode"
-
-When students sit at an open table, they don't have to study in isolation:
-
-1. **Host Mode Activation:** A student taps their seat on the interactive map (or scans the desk QR code) and enters what they are studying (e.g., *"orgo 1 midterm"* or *"CS 429 assembly"*).
-2. **Catalog Normalization:** Meta’s **Muse Spark (`muse-spark-1.3`)** model normalizes free-form text into official university course catalog codes (`CH 320M`, `CS 429`) and extracts semantic study concepts.
-3. **Compatibility Ranking:** Arriving students browse active hosts by course. The AI scores prospective study partners (0–100) based on shared subjects and syllabus topics.
-4. **Contextual Icebreaker Generation:** Once a match is confirmed, the model generates an approachable, course-specific conversation starter under 140 characters:
-   > *"Which chair flip is tripping you up on practice problem 3?"*
-5. **Physical Beacon:** The host's desk LED pulses blue, acting as a visual guide in crowded libraries.
-
----
-
-## 🏗️ System Architecture
-
-```
-[ Arduino Sensors & LEDs ]
-           │ (Serial @ 115200 baud)
-           ▼
-[ Python Serial Bridge (arduino_bridge.py) ]
-           │ (Authenticated HTTP POST /api/readings)
-           ▼
-[ FastAPI Backend Engine ] ◄────► [ TimescaleDB / Tiger Data ]
-      │             │             (Time-series occupancy metrics)
-      │             ▼
-      │     [ Meta AI Model API ]
-      │     (Muse Spark: Normalization & Icebreakers)
-      ▼
-[ React + Vite Frontend PWA ]
- (Interactive SVG maps, live seat polling, responsive cards)
-```
-
----
-
-## 💻 Tech Stack
-
-| Domain | Technologies |
+| Piece | Status |
 |---|---|
-| **Hardware & IoT** | Arduino (C++), Optical IR Proximity Sensors, Dual-Color LEDs (Blue/Green), Grove Shield |
-| **Bridge Daemon** | Python 3.12, PySerial, HTTPX |
-| **Backend API** | FastAPI, Uvicorn, Pydantic v2, ItsDangerous, PyWebPush, Segno (QR codes) |
-| **Database & Metrics** | TimescaleDB / Tiger Data (hyper-tables for occupancy time-series), Psycopg 3 |
-| **AI Track (Meta)** | Meta Muse Spark (`muse-spark-1.3`) via Meta Model API |
-| **Frontend & UI** | React 18, Vite, Vanilla CSS design system, MapLibre GL, Lucide Icons, PWA Manifest |
-| **Code Quality** | Pytest (150+ tests), Ruff linter, Mypy strict typing |
+| Seat sensing | **Real, one sensor.** The prototype has a single IR sensor per seat; those were the parts available at the hackathon. One IR sensor can't tell a person from a bag, so the bridge sends its value as both `object_present` and `human_present` |
+| Ghost-seat detection (`likely_opening`) | **Modeled in the backend, not reachable from the prototype.** It needs "object yes, human no", which one IR sensor never reports. `make fake-node` can send it (`1 b`). Planned upgrade: a thermal sensor for the person plus IR for belongings, feeding the two fields the backend already reads |
+| Demo hosts | **Simulated** (D56). With `DEMO_HOSTS=true`, `make seed-demo` creates one host per catalog course, and they accept requests after `DEMO_ACCEPT_S` (5 s) |
+| Desk installation diagram | **Concept**, below |
+| Pulsing blue beacon at the host's seat | **Planned.** The backend returns `blue_blink` for a matched seat; the prototype firmware doesn't read the backend's LED colors yet |
+| Map, matching, Muse calls, push | Real |
 
----
+## Hardware
 
-## 🚀 Getting Started
+<p align="center"><img src="docs/images/hardware_prototype.jpg" width="520" alt="Arduino prototype with IR sensor and LEDs"/></p>
 
-### Prerequisites
-* Python 3.12+
-* Node.js 18+ and npm
-* (Optional) Arduino Uno/Nano with firmware uploaded
+The prototype is an Arduino with a Grove shield, one IR sensor on D2, and two LEDs that the firmware drives itself: **green = open, blue = occupied**, matching the map. The firmware ([`firmware/HACKATHON`](firmware/HACKATHON/HACKATHON.ino)) needs 3 consistent reads (sampled every 50 ms) before it switches, and prints a text line, `occupied: true|false`, over USB serial at 115200 baud. [`bridge/arduino_bridge.py`](bridge/arduino_bridge.py) parses that line and posts JSON to `POST /api/readings` with an `X-Node-Key` header, on every change and at least every heartbeat.
 
-### 1. Backend Setup
+```
+Arduino (IR + LEDs) --serial text--> bridge (Python) --HTTP JSON--> FastAPI --> TimescaleDB
+                                                                        |  \--> Muse (topic, ranking, icebreaker)
+                                                                        v
+                                                              React PWA (polls every 3 s, web push)
+```
+
+**Concept** for a real desk: an object sensor on the desk surface and a presence sensor aimed at the chair, per seat, with one controller per table.
+
+<p align="center"><img src="docs/images/campus_desk_setup.jpg" width="100%" alt="Concept: desk installation"/></p>
+
+## Seat states
+
+The API exposes only the four public states (FR-6). Internally a seat is `open`, `occupied` (a person is there) or `away` (belongings only), and `away` stays public `occupied` until `GHOST_S` has passed:
+
+```python
+def public_state(s: SeatState, now: datetime, t: Timers) -> PublicState:
+    if is_offline(s, now, t):
+        return PublicState.OFFLINE
+    if s.state is InternalState.OPEN:
+        return PublicState.OPEN
+    if s.state is InternalState.OCCUPIED:
+        return PublicState.OCCUPIED
+    return PublicState.LIKELY_OPENING if now - s.away_since >= t.ghost else PublicState.OCCUPIED
+```
+
+- A new reading becomes the seat's state only once it has been stable for `DEBOUNCE_S` (5 s).
+- `away_since` is the moment belongings-only started, so the 30 s ghost timer includes the debounce.
+- A seat with no reading for `OFFLINE_S` (30 s) is `offline`, whatever it was before.
+- The away duration is used here and never returned by the API.
+- `now` and the timers are parameters. The domain layer has no clock, database or env access, and a test fails if it imports one.
+
+Every threshold lives in [`backend/app/config.py`](backend/app/config.py) and can be overridden by env var. Transitions happen when a seat is read, when its node reports, or on a 2 s scheduler tick; the tick selects due rows `FOR UPDATE SKIP LOCKED`, so every instance can run the tick. The full state machines (seat, host, request, match) are in [ARCHITECTURE](documentation/ARCHITECTURE.md).
+
+## Matching
+
+A host taps their seat (or scans its QR code) and types what they're studying, e.g. "orgo 1 midterm". A seeker types theirs and gets up to 5 hosts. Meta's Muse Spark (`muse-spark-1.3`) does three things:
+
+| Call | Does |
+|---|---|
+| `normalize_topic` | Free text → catalog course (`CH 320M`) and concepts |
+| `rank_hosts` | Scores hosts against the seeker's topic |
+| `icebreaker` | One course-specific opener after a match |
+
+Each call has a 4 s timeout (`AI_TIMEOUT_S`) and a deterministic fallback, and none runs inside a database lock, so a slow or failed AI call never blocks a request. Before a host accepts, the seeker sees only first name and major; the seat location is revealed after accept. Names are never sent to Muse.
+
+## Stack
+
+| Part | Choice |
+|---|---|
+| Firmware | Arduino C++, Grove shield, IR sensor, two LEDs |
+| Bridge | Python, pyserial, httpx |
+| Backend | Python 3.12, FastAPI, Pydantic v2, psycopg 3, pywebpush, uv |
+| Database | PostgreSQL 16 + TimescaleDB (hypertable, compression, retention) |
+| AI | Meta Muse Spark, behind a timeout and a rule-based fallback |
+| Frontend | React 19, TypeScript, Vite, MapLibre GL, installable PWA with web push |
+| Hosting | Vultr |
+
+## Run it locally
+
+You need [uv](https://docs.astral.sh/uv/) (it installs Python 3.12), Docker, `make`, and Node 22 or 24 with the npm that ships with it (npm 10+). The database image is 3.2 GB.
+
 ```bash
 cd backend
-# Create environment file
-cp .env.example .env
-
-# Install dependencies and start server (runs in standalone in-memory mode by default)
-pip install -r pyproject.toml # or uv sync
-python -m uvicorn app.main:build --factory --port 8000
-```
-Backend runs at `http://localhost:8000`. API docs available at `http://localhost:8000/docs`.
-
-### 2. Frontend Setup
-```bash
-# In the repository root
-npm install
-npm run dev
-```
-Open `http://localhost:5173` in your browser.
-
-### 3. Connect Physical Hardware
-```bash
-# Plug in Arduino via USB, then run the serial bridge daemon:
-python backend/scripts/arduino_bridge.py
+make sync db-up db-create     # deps, Postgres + TimescaleDB on :5433, databases ghostseats and ghostseats_test
+make vapid-keys               # prints two VAPID_ lines for .env
 ```
 
----
-
-## 🧪 Test Suite
-
-We maintain a rigorous automated test suite covering state transitions, seat debouncing, AI fallback logic, and session security:
+Then write `backend/.env`, which is gitignored:
 
 ```bash
-# Run backend test suite
-cd backend && pytest tests/unit tests/services
+DATABASE_URL=postgresql://postgres:ghostseats@localhost:5433/ghostseats
+SECRET_KEY=<python3 -c 'import secrets; print(secrets.token_urlsafe(48))'>
+NODE_KEY=<python3 -c 'import secrets; print(secrets.token_urlsafe(24))'>
+VAPID_SUBJECT=mailto:you@example.com
+# VAPID_PUBLIC_KEY=… and VAPID_PRIVATE_KEY=… from make vapid-keys
 ```
-* **150+ Unit & Service Tests** pass with 100% reliability in standalone mode.
-* **Fallback Guarantee:** The system uses a `GuardedAI` wrapper so that if the external AI service times out, the app gracefully falls back to deterministic course matching without disrupting users.
 
----
+```bash
+make db-init seed policies seed-history
+make dev                      # API on :8000, live contract at /docs
+```
 
-## 👥 The Team
-Built with ❤️ at **HackTX 2026** by:
-* **Sourish**
-* **Siddhartha (Sid)**
-* **Manideep (Mani)**
-* **Dina**
+In a second terminal, from the repo root:
+
+```bash
+npm ci
+npm run dev                   # http://localhost:5173, proxies /api to :8000
+```
+
+In a third, act as the hardware: `cd backend && make fake-node`, then type `1 p` for a person, `1 b` for a bag alone, `1 e` for empty, `q` to quit. Seat `t1-s1` changes on the map within a few seconds. Without `MUSE_API_KEY`, matching uses the fallback.
+
+The Vite proxy expects the API on port 8000; if something else holds that port, stop it first.
+
+Real hardware: flash `firmware/HACKATHON`, plug in the Arduino, then from the repo root run `pip install -r bridge/requirements.txt` and `GHOSTSEATS_URL=http://localhost:8000 NODE_KEY=<key from .env> python bridge/arduino_bridge.py`.
+
+## Tests
+
+| Command | Result |
+|---|---|
+| `cd backend && make check` | ruff, mypy `--strict`, 184 passed, 29 skipped (Postgres tests skip without a DB) |
+| `cd backend && make test-db` | 213 passed, including the Postgres repository contract tests |
+| `npm test` | 32 passed (Vitest) |
+| `npm run build` | type-checks the app and service worker, builds the PWA |
+
+`InMemoryRepository` and `PostgresRepository` pass the same contract suite in `backend/tests/repo_contract/`. `make load-check` runs 500 polling clients and 50 fake nodes against a running API.
+
+## Limitations
+
+- Presence comes from one IR sensor, so the prototype can't produce `likely_opening`. The thermal + IR upgrade is the first thing to build.
+- The prototype firmware ignores the LED colors the backend returns, and the backend's LED colors (red for occupied) don't match the firmware and map (blue). The map is the reference (D54).
+- Push delivery is at-least-once through a transactional outbox, so a notification can arrive twice.
+- The frontend polls every 3 s; there is no WebSocket.
+- Demo hosts are simulated, and there is no real account system: sign-in is a demo-user picker.
+
+## Docs
+
+[ARCHITECTURE](documentation/ARCHITECTURE.md) (layers, state machines, push, scaling) · [REQUIREMENTS](documentation/REQUIREMENTS.md) (FR/NFR ids, API contract) · [USER_FLOWS](documentation/USER_FLOWS.md) · [backend README](backend/README.md)
+
+## Team
+
+Built at HackTX 2026 by Sourish, Siddhartha (Sid), Manideep (Mani) and Dina.

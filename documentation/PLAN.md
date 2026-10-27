@@ -276,6 +276,7 @@ REQUIREMENTS §11, plus WebSockets (FR-10 specifies polling).
 | Q18 | Prompt while a role is active; host toggle placement; exhausted search next step | Author | F3 | Resolved: D46, D49 |
 | Q19 | Copy for empty states, hidden reasons, recommendations and errors | Author | F3 | **Open** |
 | Q20 | Whether and when v2 replaces the frontend on `v1final` and `main` | Author, frontend partner | — | **Open** |
+| Q21 | The backend's LED colors (`occupied` → `red`, `likely_opening` → `yellow`) differ from the firmware and map, where occupied is blue (D54). Change the backend LED contract to blue, or leave it until the firmware reads it? | Author, hardware pair | — | **Open** |
 | U1 | Muse Spark and Muse Image access (key, endpoint, auth, JSON mode) | Backend, from Meta sponsors | B4.7, F4.3 | Resolved: key obtained; API per D38. `muse-image-1.0` is on the same API (F4.3) |
 | U2 | Tiger Data: connection limit (sets `DB_POOL_SIZE`) | Backend | Deploy | Resolved: `max_connections` 105 (12 reserved); 2 hosts × 2 workers × 5 = 20, so `DB_POOL_SIZE` stays 5 |
 | U3 | Deploy host (always-on, HTTPS, env vars, ≥ 2 instances) | Backend | B2.4 | Resolved: D36, D37 |
@@ -650,3 +651,12 @@ replaces D36's load balancer and D37's DNS requirement. Each server (`64.177.55.
 (Let's Encrypt, `<ip>.sslip.io` until a domain points at server 1). Server 1 is the public
 URL; server 2 is a hot backup at its own address. Both use Tiger Data. Deploy:
 `HOSTS="root@64.177.55.143 root@45.32.219.190" FRONTEND_DIR=. make deploy REF=origin/v2-frontendredo`.
+
+**D58 — README audit on `v3-repoaudit`; demo tag.** The author's call, after an outside review.
+- The README states only what the code and the prototype do, with a real-vs-simulated table
+  (one IR sensor, simulated demo hosts, concept desk diagram, planned beacon).
+- Planned hardware: thermal for the person plus IR for belongings, feeding the existing
+  `human_present` / `object_present` (Q14).
+- The team section lists the four names only.
+- `hacktx-2026` tags `2197e21`, the last commit before the 11:30 demo.
+- Layout moves, branch deletion, CI and a license are out of scope for this pass.

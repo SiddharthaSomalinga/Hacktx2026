@@ -7,8 +7,8 @@ Session log. Concrete changes, commands and observed results only.
 - **Milestone:** all branches integrated in `v1final` (D40); the two-phone flow works in the
   browser with live Muse (Session 7). Remaining: the Tiger migration for D43, Q14 (demo-table
   sensors), and the D36 Vultr deploy.
-- **Tests:** 211 pass with Postgres (`make test-db`); 182 pass and 29 skip without it. Live e2e: 114/114 (Session 6).
-- **Open questions:** Q14, Q19, Q20 (PLAN). Q2, U1, U2 and U3 resolved.
+- **Tests:** 213 pass with Postgres (`make test-db`); 184 pass and 29 skip without it; frontend 32 (Vitest). Live e2e: 114/114 (Session 6).
+- **Open questions:** Q14, Q19, Q20, Q21 (PLAN). Q2, U1, U2 and U3 resolved.
 
 ---
 
@@ -532,6 +532,52 @@ Caught before committing:
 - `https://64.177.55.143.sslip.io` and `https://45.32.219.190.sslip.io`: valid certificates,
   200. Live check: "macro econ" → join → matched with Skyler in under 10 s, Muse icebreaker,
   card image 200.
+
+## 2026-10-27 — Session 9: README audit, demo tag (D58)
+
+An outside review of the public repo found README claims the code did not support and a
+quickstart that failed from a fresh clone. Work is on `v3-repoaudit`; nothing pushed.
+
+### Branch and tag
+- `v3-repoaudit` starts at local `v2-frontendredo` (`8b4d296`), which already holds `main`, the
+  unpushed Synapse rename (`63619cd`) and the README title fix.
+- `hacktx-2026` (annotated) → `2197e21`, Sun 11:17, the last commit before the 11:30 demo.
+  Local only.
+- Removed `firmware/Transmitter Code from Arudino.txt`, a Next.js BLE component, not firmware.
+
+### README claims checked against the code
+| README said | Code says |
+|---|---|
+| Human IR sensor plus object IR sensor | One IR sensor on D2; the bridge copies it into both fields (Q14) |
+| Blue = vacant, green = occupied | Firmware and map: green = open, blue = occupied (D54) |
+| Arduino streams JSON | Firmware prints `occupied: true|false`; the bridge sends the JSON |
+| `DEBOUNCE_S = 1s` | `debounce_s = 5` |
+| Vacant / Away / LikelyOpening states | Public states `open`, `occupied`, `likely_opening`, `offline` (FR-6) |
+| React 18, Node 18+ | React 19.3.1; Node `^22.12 || ^24` |
+| "In-memory by default", `pip install -r pyproject.toml`, `backend/scripts/arduino_bridge.py` | None exist; the Makefile flow and `bridge/` do |
+
+The README was rewritten with a real-vs-simulated table, the verified quickstart, measured test
+counts and a limitations section. The team section lists names only.
+
+### Fresh-clone run (scratchpad clone of `v3-repoaudit`, macOS)
+- `make sync db-up db-create`, `make vapid-keys`, `.env` as in the README (fresh database
+  `ghostseats_fresh` in the existing container, dropped afterwards), then
+  `make db-init seed policies seed-history`: "seeded 7269 change rows for 98 seats".
+- API on :8001 (:8000 was taken by the dev server): `/api/health` → `{"ok":true,"db":true}`.
+  `make fake-node --base-url :8001`, `1 p`: `t1-s1` offline → occupied; LEDs `green` → `red`.
+- `npm ci` failed with `EBADENGINE`: Homebrew's npm 7.13 was ahead of Node 24's npm on `PATH`
+  and `.npmrc` sets `engine-strict`. A local leftover, not a repo issue: the 2021 Homebrew
+  npm was moved aside, and plain `npm ci` then passed (0 vulnerabilities).
+- Vite on :5199: page title "Synapse", `/api/health` through the proxy → ok.
+
+### Measured
+- `make check`: ruff, mypy `--strict`, 184 passed, 29 skipped.
+- `make test-db`: 213 passed.
+- `npm test`: 32 passed (7 files). `npm run build`: passes, 77 precache entries.
+
+### Found
+- The backend's LED colors (`occupied` → `red`, `seat_engine._LED`) disagree with the firmware
+  and the map (blue, D54). Not changed; Q21.
 
 ## Next steps
 1. **Tiger migration (before any deploy of `v1final`):** on a hotspot, from `backend/`, run
