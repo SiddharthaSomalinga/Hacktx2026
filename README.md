@@ -118,7 +118,7 @@ npm run dev                   # http://localhost:5173, proxies /api to :8000
 
 In a third, act as the hardware: `cd backend && make fake-node`, then type `1 p` for a person, `1 b` for a bag alone, `1 e` for empty, `q` to quit. Seat `t1-s1` changes on the map within a few seconds. Without `MUSE_API_KEY`, matching uses the fallback.
 
-I ran these steps in a fresh clone on macOS. Two gotchas came up: `npm ci` fails with `EBADENGINE` if an older global npm (7.x) is first on `PATH`, because `.npmrc` sets `engine-strict`; and the Vite proxy expects the API on port 8000.
+The Vite proxy expects the API on port 8000; if something else holds that port, stop it first.
 
 Real hardware: flash `firmware/HACKATHON`, plug in the Arduino, then from the repo root run `pip install -r bridge/requirements.txt` and `GHOSTSEATS_URL=http://localhost:8000 NODE_KEY=<key from .env> python bridge/arduino_bridge.py`.
 

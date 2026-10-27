@@ -566,8 +566,8 @@ counts and a limitations section. The team section lists names only.
 - API on :8001 (:8000 was taken by the dev server): `/api/health` → `{"ok":true,"db":true}`.
   `make fake-node --base-url :8001`, `1 p`: `t1-s1` offline → occupied; LEDs `green` → `red`.
 - `npm ci` failed with `EBADENGINE`: Homebrew's npm 7.13 was ahead of Node 24's npm on `PATH`
-  and `.npmrc` sets `engine-strict`. With `/usr/local/bin/npm`: 0 vulnerabilities. Noted in
-  the README as a gotcha.
+  and `.npmrc` sets `engine-strict`. A local leftover, not a repo issue: the 2021 Homebrew
+  npm was moved aside, and plain `npm ci` then passed (0 vulnerabilities).
 - Vite on :5199: page title "Synapse", `/api/health` through the proxy → ok.
 
 ### Measured
