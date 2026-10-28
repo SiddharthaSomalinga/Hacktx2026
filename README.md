@@ -184,13 +184,22 @@ That is the full offered load, about 355 requests/s, with no errors in 64,000 re
 
 1000 phones (685 requests/s) kept the map routes' p50 under 3 ms. At 2000 phones, 2050 open connections, it broke: p50 rose to 0.05–0.5 s and p95 to 1.6–5 s, node posts fell behind, and a few requests timed out. During those runs the server's own histogram (`/metrics`, timed from the middleware) kept the map routes' p95 at 10 ms or less, and 680 phones polling every second, the same request rate over a third of the connections, stayed at a p50 of 4 ms. So the limit was concurrent connections on this laptop, not the request rate or the database. No process was CPU-bound, swap activity didn't change, and neither 8 server workers nor 16 generator processes helped. With both ends on one machine I couldn't narrow it further; the next run puts the generator on a second machine.
 
-## Limitations
+## Limitations and next steps
 
-- Presence comes from one IR sensor, so the prototype can't produce `likely_opening`. The thermal + IR upgrade is the first thing to build.
-- The prototype firmware ignores the LED colors the backend returns, and the backend's LED colors (red for occupied) don't match the firmware and map (blue). The map is the reference (D54).
-- Push delivery is at-least-once through a transactional outbox, so a notification can arrive twice.
-- The frontend polls every 3 s; there is no WebSocket.
-- Demo hosts are simulated, and there is no real account system: sign-in is a demo-user picker.
+- Presence comes from one IR sensor, so the prototype can't produce `likely_opening` (below). **Next:** the thermal + IR pair from the table above (D58).
+- The prototype firmware ignores the LED colors the backend returns, and the backend's LED colors (red for occupied) don't match the firmware and map (blue). The map is the reference (D54). **Next:** settle the colors (Q21), then have the firmware show what the backend returns, which also brings the matched-seat beacon.
+- Sign-in is a demo-user picker, and demo hosts are simulated. **Next:** university SSO behind the same auth service (NFR-7).
+- Push is at-least-once, so a notification can arrive twice; the service worker tags it by URL, so the second replaces the first on screen.
+- The frontend polls every 3 s; there is no WebSocket. On one laptop the stack carried 1000 polling phones but not 2000 open connections (Load).
+- Instances read time from their own clocks, so clock skew between servers shifts deadlines by the skew ([CONCURRENCY](docs/CONCURRENCY.md)).
+- The two servers have no load balancer (D57). Server 2 is a hot backup at its own address, so failing over means changing the URL.
+
+## At the hackathon
+
+Two things went wrong that shaped what's here.
+
+- **The venue Wi-Fi blocked database ports and SSH.** Outbound 5432 and Tiger's port timed out even to an unrelated host while HTTPS worked. The app itself was unaffected: phones and the bridge talk only to the public HTTPS URL, and the servers reach Tiger from Vultr's network. What did break was operator work from the laptop, applying the schema and deploying over SSH, so that ran over a phone hotspot.
+- **The parts came down to one IR sensor per seat.** The design called for two signals per seat, an object and a person (the original plan was a micro switch and a Bluetooth presence link). One IR sensor reads a bag and a person the same way, so the bridge sends its one value as both, and the ghost-seat state the project is built around can't come from the prototype. The backend kept the two-signal model, so the hardware fix is a second sensor, with no backend change.
 
 ## Design
 
