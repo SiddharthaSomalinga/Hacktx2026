@@ -212,7 +212,7 @@ Two things went wrong that shaped what's here.
 | [TESTING](docs/TESTING.md) | Features with manual test steps |
 | [backend README](backend/README.md) | Running, testing and deploying the API |
 
-[PLAN](docs/PLAN.md) (decisions D1–D59, open questions) and [PROGRESS](docs/PROGRESS.md) (what was run, per session) are the build log.
+[PLAN](docs/PLAN.md) (decisions D1–D60, open questions) and [PROGRESS](docs/PROGRESS.md) (what was run, per session) are the build log.
 
 ## Team
 
