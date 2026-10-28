@@ -366,6 +366,16 @@ class InMemoryTx:
                 out.append(r.search_id)
         return sorted(set(out))
 
+    def idle_search_ids(self) -> list[str]:
+        pending = {
+            r.search_id for r in self.d.requests.values() if r.status is RequestStatus.PENDING
+        }
+        return sorted(
+            s.id
+            for s in self.d.searches.values()
+            if s.status is SearchStatus.ACTIVE and s.joined_at is not None and s.id not in pending
+        )
+
     def due_match_ids(self, now: datetime, host_absent_before: datetime) -> list[str]:
         out = []
         for m in self.d.matches.values():

@@ -62,6 +62,8 @@ class Settings(BaseSettings):
     history_window_h: int = Field(24, gt=0)
     readings_retention_days: int = Field(30, gt=0)
     push_max_attempts: int = Field(5, gt=0)
+    # A joined search with nothing pending this long lost its next send; the tick resumes it.
+    search_stall_s: int = Field(10, gt=0)  # D61
     # Demo hosts (D56): simulated hosts take requests and accept them after DEMO_ACCEPT_S, so
     # the seeker flow can be tried alone. Off by default: FR-31 holds unless this is set.
     demo_hosts: bool = False

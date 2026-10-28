@@ -54,6 +54,7 @@ def build_services(settings: Settings) -> Services:
         vapid_public_key=settings.vapid_public_key,
         demo_hosts=settings.demo_hosts,
         demo_accept=timedelta(seconds=settings.demo_accept_s),
+        search_stall=timedelta(seconds=settings.search_stall_s),
         metrics=PrometheusMetrics(settings.prometheus_multiproc_dir),
     )
     return Services.build(ctx)

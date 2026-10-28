@@ -23,6 +23,9 @@ class SchedulerService:
         self._ctx = ctx
         self._lifecycle = lifecycle
         self._requests = requests
+        # When this process first saw each idle search. Derived, not state of record: losing it
+        # only delays a resume by SEARCH_STALL_S.
+        self._idle_since: dict[str, datetime] = {}
 
     def tick(self) -> int:
         started = self._ctx.clock.monotonic()
@@ -32,6 +35,8 @@ class SchedulerService:
             sessions = tx.due_session_ids(now, now - t.host_end)
             matches = tx.due_match_ids(now, now - t.host_leave_cancel)
             searches = tx.due_search_ids(now, now - t.human_fresh)
+            idle = tx.idle_search_ids()
+        searches += self._stalled(idle, now)
         for session_id in sessions:
             self._lifecycle.advance_session(session_id, Lock.SKIP)
         for match_id in matches:
@@ -42,6 +47,15 @@ class SchedulerService:
         due = len(sessions) + len(matches) + len(searches) + accepted
         self._ctx.metrics.observe_tick(self._ctx.clock.monotonic() - started, due)
         return due
+
+    def _stalled(self, idle: list[str], now: datetime) -> list[str]:
+        """Idle searches this process has seen idle for SEARCH_STALL_S (D61). An idle search is
+        normally a send in flight (ranking can take AI_TIMEOUT_S); one idle longer lost its send
+        to a failure, and nothing else would resume it once clients stop polling."""
+        self._idle_since = {sid: self._idle_since.get(sid, now) for sid in idle}
+        return [
+            sid for sid, since in self._idle_since.items() if now - since >= self._ctx.search_stall
+        ]
 
     def _accept_for_demo_hosts(self, now: datetime) -> int:
         """D56: a simulated host accepts a request DEMO_ACCEPT_S after it arrives, through the

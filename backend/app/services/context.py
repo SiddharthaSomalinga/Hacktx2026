@@ -22,4 +22,5 @@ class Context:
     vapid_public_key: str
     demo_hosts: bool = False  # D56
     demo_accept: timedelta = timedelta(seconds=5)
+    search_stall: timedelta = timedelta(seconds=10)  # D61
     metrics: Metrics = field(default_factory=NullMetrics)  # D60

@@ -740,6 +740,19 @@ Caught before committing:
    Vitest case flips one seat between every pair of states; it failed 1 of 2 before the fix.
    Frontend tests: 34.
 
+## 2026-10-28 — Session 13: live stream (D61), branch `v6-live`
+
+### Bugs (cause → fix)
+1. **A search could stall for good once nobody polled it.** Cause: `advance_search` expires
+   the pending request in one transaction, ranks hosts outside any lock, then sends in a
+   second one. A failure between the two left the search joined, active and with nothing
+   pending, and `due_search_ids` only selects searches that have a pending request. Only the
+   seeker's own status poll resumed it, and D61 removes that poll. Fix: the tick also resumes
+   searches that each process has seen idle (`idle_search_ids`) for `SEARCH_STALL_S` (10 s).
+   That is long enough for a send in flight, so ticks on four processes don't each call Muse
+   for the same search. New worker test (failed before the fix) and a contract test. 239 pass
+   with Postgres.
+
 ## Next steps
 1. **Before redeploying,** check each server's Caddyfile upstream (bug 1). Then
    `HOSTS="root@64.177.55.143 root@45.32.219.190" make deploy` from `backend/`, and confirm

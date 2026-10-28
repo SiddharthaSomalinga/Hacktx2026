@@ -294,6 +294,22 @@ def test_due_queries(repo: Repository) -> None:
         assert tx.due_session_ids(at(105), at(50)) == [host_gone.id]  # simulated never due
 
 
+
+def test_idle_searches_are_joined_active_and_have_nothing_pending(repo: Repository) -> None:
+    host = new_session()
+    waiting = new_search(joined_at=at(1))
+    idle = new_search(seeker="sam", joined_at=at(1))
+    preview = new_search(seeker="jordan")  # not joined: the seeker hasn't asked for anyone
+    done = new_search(seeker="alex", joined_at=at(1), status=SearchStatus.EXHAUSTED)
+    with repo.tx() as tx:
+        tx.insert_session(host)
+        for q in (waiting, idle, preview, done):
+            tx.insert_search(q)
+        tx.insert_request(new_request(waiting, host))
+        tx.insert_request(new_request(idle, host, status=RequestStatus.EXPIRED))
+    with repo.read() as tx:
+        assert tx.idle_search_ids() == [idle.id]
+
 # --- history (FR-49, D31) -------------------------------------------------------------
 
 

@@ -660,6 +660,16 @@ class PostgresTx:
         )
         return [str(r["search_id"]) for r in rows]
 
+    def idle_search_ids(self) -> list[str]:
+        rows = self._all(
+            """SELECT s.id FROM searches s
+               WHERE s.status = 'active' AND s.joined_at IS NOT NULL
+                 AND NOT EXISTS (SELECT 1 FROM requests r
+                                 WHERE r.search_id = s.id AND r.status = 'pending')
+               ORDER BY 1"""
+        )
+        return [str(r["id"]) for r in rows]
+
     def due_match_ids(self, now: datetime, host_absent_before: datetime) -> list[str]:
         rows = self._all(
             """SELECT m.id FROM matches m JOIN host_sessions h ON h.id = m.host_session_id
