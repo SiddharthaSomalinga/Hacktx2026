@@ -10,7 +10,7 @@ Session log. Concrete changes, commands and observed results only.
 - **Live:** `https://64.177.55.143.sslip.io` (server 2 at `45.32.219.190`), D57. Still runs the
   D57 build; nothing from D59 or D60 is deployed.
 - **Tests:** 236 pass with Postgres (`make test-db`); 204 pass and 32 skip without it; bridge 13;
-  frontend 32 (Vitest); browser e2e 1 (Playwright, against the compose stack). Live e2e: 114/114
+  frontend 34 (Vitest); browser e2e 1 (Playwright, against the compose stack). Live e2e: 114/114
   (Session 6).
 - **Open questions:** Q14, Q19, Q21, Q22 (PLAN).
 
@@ -731,6 +731,14 @@ Caught before committing:
 - `frontend/vite.config.ts`: `API_PROXY_TARGET` overrides the dev proxy target.
 - `backend/README.md`: Tiger's connection limit (105) and the Vultr deploy replace "not checked"
   and "not deployed"; push on real devices is still listed as unverified.
+
+### Bugs (cause → fix)
+1. **The recommendation never refreshed when a seat went between open, occupied and offline.**
+   Cause: `stateSignature` in `frontend/src/api/queries.ts` keyed the recommend query on each
+   seat's first letter, and `open`, `occupied` and `offline` all start with `o`; only changes to
+   or from `likely_opening` refetched. Fix: the signature is `seat id:state` per seat. A new
+   Vitest case flips one seat between every pair of states; it failed 1 of 2 before the fix.
+   Frontend tests: 34.
 
 ## Next steps
 1. **Before redeploying,** check each server's Caddyfile upstream (bug 1). Then
