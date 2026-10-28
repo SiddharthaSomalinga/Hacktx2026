@@ -148,7 +148,12 @@ class Resync:
     """The hint feed (re)connected: hints may have been missed, so treat everything as dirty."""
 
 
-Hint = MapHint | UserHint | Resync
+@dataclass(frozen=True)
+class Lost:
+    """The hint feed lost its connection; until the next `Resync`, hints are not arriving."""
+
+
+Hint = MapHint | UserHint | Resync | Lost
 
 
 class OutboxRow(Protocol):
@@ -305,9 +310,9 @@ class Repository(Protocol):
     def ping(self) -> bool: ...
 
     def hints(self) -> AsyncIterator[Hint]:
-        """Hints from every committed write, on every instance (D61). Starts with `Resync`, and
-        yields `Resync` again after any reconnect, because hints may be lost while disconnected.
-        Never ends on its own; cancel the consumer to stop it."""
+        """Hints from every committed write, on every instance (D61). Starts with `Resync`;
+        yields `Lost` when the connection fails and `Resync` again once it is back, because
+        hints may be lost meanwhile. Never ends on its own; cancel the consumer to stop it."""
         ...
 
     def history(

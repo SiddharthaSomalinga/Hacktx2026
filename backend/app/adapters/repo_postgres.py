@@ -53,6 +53,7 @@ from app.services.ports import (
     Conflict,
     Hint,
     Lock,
+    Lost,
     MapHint,
     PushSubscription,
     Resync,
@@ -195,6 +196,8 @@ def _match(r: Row) -> Match:
 # seat, and whether the table still has an open seat, FR-24); both sides of an active match
 # whose assigned seat is on its floor (the alternative seat, FR-39). Presence alone reaches
 # only the host at that seat.
+FEED_APPLICATION_NAME = "synapse-live"  # how the listener shows in pg_stat_activity
+
 _WATCHERS_SQL = """
 WITH changed AS (
   SELECT s.id, s.table_id, t.building_id, t.floor
@@ -871,6 +874,7 @@ class PostgresRepository:
                     keepalives_idle=30,
                     keepalives_interval=10,
                     keepalives_count=3,
+                    application_name=FEED_APPLICATION_NAME,
                 )
                 await conn.execute(f"LISTEN {CHANNEL}".encode())
                 delay = 1.0
@@ -884,6 +888,7 @@ class PostgresRepository:
                 if conn is not None:
                     with anyio.CancelScope(shield=True):
                         await conn.close()
+            yield Lost()
             await anyio.sleep(delay * random.uniform(0.5, 1.5))  # jitter: not all at once
             delay = min(delay * 2, 30.0)
 

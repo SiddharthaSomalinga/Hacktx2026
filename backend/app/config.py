@@ -64,6 +64,13 @@ class Settings(BaseSettings):
     push_max_attempts: int = Field(5, gt=0)
     # A joined search with nothing pending this long lost its next send; the tick resumes it.
     search_stall_s: int = Field(10, gt=0)  # D61
+    # The live stream (D61): re-check interval and shortest gap between broadcasts of one
+    # snapshot; listener probe; suggested reconnect delay; how long a stalled client is kept.
+    live_enabled: bool = True
+    live_check_s: float = Field(1, gt=0)
+    live_feed_probe_s: float = Field(30, gt=0)
+    live_retry_s: float = Field(2, gt=0)
+    live_stall_s: float = Field(30, gt=0)
     # Demo hosts (D56): simulated hosts take requests and accept them after DEMO_ACCEPT_S, so
     # the seeker flow can be tried alone. Off by default: FR-31 holds unless this is set.
     demo_hosts: bool = False

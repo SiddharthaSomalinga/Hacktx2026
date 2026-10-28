@@ -11,6 +11,7 @@ from app.services.health import HealthService
 from app.services.history import HistoryService
 from app.services.host import HostService
 from app.services.lifecycle import LifecycleService
+from app.services.live import LiveHub, LiveService
 from app.services.map import MapService
 from app.services.match import MatchService
 from app.services.metrics import MetricsService
@@ -40,6 +41,7 @@ class Services:
     push: PushService
     scheduler: SchedulerService
     metrics: MetricsService
+    live: LiveService
 
     @staticmethod
     def build(ctx: Context) -> Services:
@@ -47,12 +49,13 @@ class Services:
         lifecycle = LifecycleService(ctx)
         topics = TopicsService(ctx)
         requests = RequestService(ctx, lifecycle)
+        map_service = MapService(ctx)  # one instance: the hub's rebuilds refresh the GETs' cache
         return Services(
             ctx=ctx,
             lifecycle=lifecycle,
             health=HealthService(ctx),
             readings=ReadingsService(ctx, lifecycle),
-            map=MapService(ctx),
+            map=map_service,
             history=HistoryService(ctx),
             auth=AuthService(ctx, lifecycle),
             host=HostService(ctx, lifecycle, topics),
@@ -63,4 +66,5 @@ class Services:
             push=PushService(ctx),
             scheduler=SchedulerService(ctx, lifecycle, requests),
             metrics=MetricsService(ctx),
+            live=LiveService(ctx, LiveHub(ctx, map_service)),
         )
