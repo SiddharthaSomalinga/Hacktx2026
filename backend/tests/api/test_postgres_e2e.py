@@ -275,7 +275,7 @@ def test_seat_lock_keeps_a_reading_and_a_concurrent_blink(
     pg: tuple[Services, PostgresRepository, FakeClock, str],
 ) -> None:
     """Accept and the match view set `blink_until` under the seat lock while ingest rewrites the
-    same row. Without FOR UPDATE, whichever transaction commits second erases the other's write."""
+    same row. Without FOR UPDATE, the later commit overwrites the earlier one's change."""
     services, repo, clock, _ = pg
     locked = threading.Event()
     ingested = threading.Event()

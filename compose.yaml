@@ -1,7 +1,8 @@
 # One-command local demo (D60): `docker compose up --build` (or `make demo`), then open
 # http://localhost:8000. Postgres with TimescaleDB, a one-shot setup job, and the deploy image
 # with demo hosts on. The keys are generated on first start into the `state` volume, so
-# nothing secret is in this file. `docker compose down -v` deletes the data and the keys.
+# nothing secret is in this file. `docker compose down -v` removes the volumes: the database
+# and the generated keys.
 #
 # Act as the seat sensor: docker compose run --rm fake-node
 

@@ -20,7 +20,7 @@ Built by 4 people at HackTX 2026, Sat 6 pm → Sun 11:30 am. The tag [`hacktx-20
 
 | Piece | Status |
 |---|---|
-| Seat sensing | **Real, one sensor.** The prototype has a single IR sensor per seat; those were the parts available at the hackathon. One IR sensor can't tell a person from a bag, so the bridge sends its value as both `object_present` and `human_present` |
+| Seat sensing | **Real, one sensor.** The prototype has a single IR sensor per seat; those were the parts available at the hackathon. A single IR beam can't distinguish a person from a bag, so the bridge sends its value as both `object_present` and `human_present` |
 | Ghost-seat detection (`likely_opening`) | **Modeled in the backend, not reachable from the prototype.** It needs "object yes, human no", which one IR sensor never reports. `make fake-node` can send it (`1 b`). Planned upgrade: a thermal sensor for the person plus IR for belongings, feeding the two fields the backend already reads |
 | Demo hosts | **Simulated** (D56). With `DEMO_HOSTS=true`, `make seed-demo` creates one host per catalog course, and they accept requests after `DEMO_ACCEPT_S` (5 s) |
 | Desk installation diagram | **Concept**, below |
@@ -31,7 +31,7 @@ Built by 4 people at HackTX 2026, Sat 6 pm → Sun 11:30 am. The tag [`hacktx-20
 
 <p align="center"><img src="docs/images/hardware_prototype.jpg" width="520" alt="Arduino prototype with IR sensor and LEDs"/></p>
 
-The prototype is an Arduino with a Grove shield, one IR sensor on D2, and two LEDs that the firmware drives itself: **green = open, blue = occupied**, matching the map. The firmware ([`firmware/HACKATHON`](firmware/HACKATHON/HACKATHON.ino)) needs 3 consistent reads (sampled every 50 ms) before it switches, and prints a text line, `occupied: true|false`, over USB serial at 115200 baud. [`bridge/arduino_bridge.py`](bridge/arduino_bridge.py) parses that line and posts JSON to `POST /api/readings` with an `X-Node-Key` header, on every change and at least every heartbeat.
+The prototype is an Arduino with a Grove shield, one IR sensor on D2, and two LEDs that the firmware drives itself: **green = open, blue = occupied**, matching the map. The firmware ([`firmware/HACKATHON`](firmware/HACKATHON/HACKATHON.ino)) needs 3 consistent reads (sampled every 50 ms) before it switches, and prints a text line, `occupied: true|false`, over USB serial at 115200 baud. [`bridge/arduino_bridge.py`](bridge/arduino_bridge.py) parses that line and posts JSON to `POST /api/readings` with an `X-Node-Key` header, whenever the reading changes, and every 2 s regardless.
 
 ```
 Arduino (IR + LEDs) --serial text--> bridge (Python) --HTTP JSON--> FastAPI --> TimescaleDB
@@ -62,7 +62,7 @@ def public_state(s: SeatState, now: datetime, t: Timers) -> PublicState:
 - A new reading becomes the seat's state only once it has been stable for `DEBOUNCE_S` (5 s).
 - `away_since` is the moment belongings-only started, so the 30 s ghost timer includes the debounce.
 - A seat with no reading for `OFFLINE_S` (30 s) is `offline`, whatever it was before.
-- The away duration is used here and never returned by the API.
+- The away duration only feeds this decision; the API never exposes it.
 - `now` and the timers are parameters. The domain layer has no clock, database or env access, and a test fails if it imports one.
 
 Every threshold lives in [`backend/app/config.py`](backend/app/config.py) and can be overridden by env var. Transitions happen when a seat is read, when its node reports, or on a 2 s scheduler tick; the tick selects due rows `FOR UPDATE SKIP LOCKED`, so every instance can run the tick. The full state machines (seat, host, request, match) are in [ARCHITECTURE](docs/ARCHITECTURE.md).
@@ -172,7 +172,7 @@ Real hardware: flash `firmware/HACKATHON`, plug in the Arduino, then from the re
 
 ## Load
 
-`cd backend && make load-check` runs simulated phones that poll the map every 3 s with `If-None-Match`, as the app does, plus 50 fake nodes posting every 2 s, against a running API, then removes its test data. Measured on an Apple M1 (8 GB) with the API as 4 uvicorn workers (JSON logs and metrics on), Postgres in Docker (4 CPUs, 2 GB), and the generator on the same laptop:
+`cd backend && make load-check` runs simulated phones that poll the map the way the app does (every 3 s, sending `If-None-Match`), plus 50 fake nodes posting every 2 s, against a running API, then removes its test data. Measured on an Apple M1 (8 GB) with the API as 4 uvicorn workers (JSON logs and metrics on), Postgres in Docker (4 CPUs, 2 GB), and the generator on the same laptop:
 
 | 500 phones, 3 runs × 60 s | p50 | p95 | max |
 |---|---|---|---|

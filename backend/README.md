@@ -184,8 +184,8 @@ every 2 s, and then removes the load-test data.
 
 ## Deploy
 
-Two Vultr instances (D57). Each builds and runs one image, the API with its worker thread and
-the built frontend, behind Caddy, which terminates HTTPS with a Let's Encrypt certificate for
+Two Vultr instances (D57). Each builds and runs one image (API, worker thread, built frontend)
+behind Caddy, which terminates HTTPS with a Let's Encrypt certificate for
 `<ip>.sslip.io`. The container's port is published on 127.0.0.1 only, so traffic reaches it
 through Caddy.
 
