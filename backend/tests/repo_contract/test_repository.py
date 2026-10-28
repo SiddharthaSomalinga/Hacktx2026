@@ -251,6 +251,7 @@ def test_subscriptions_and_outbox(repo: Repository) -> None:
         subs = tx.subscriptions_for("alex")
         assert [(s.endpoint, s.p256dh) for s in subs] == [("https://e/1", "k2")]
         assert len(tx.subscriptions_for("priya")) == 1
+        assert tx.outbox_unsent() == 2
         rows = tx.claim_outbox(10)
         assert [r.message.kind for r in rows] == ["request_received", "search_exhausted"]
         assert rows[0].message.payload == {"title": "t", "url": "/host"}
@@ -259,6 +260,7 @@ def test_subscriptions_and_outbox(repo: Repository) -> None:
     with repo.tx() as tx:
         left = tx.claim_outbox(10)
         assert [(r.message.kind, r.attempts) for r in left] == [("search_exhausted", 1)]
+        assert tx.outbox_unsent() == 1  # the retried row still counts
         tx.delete_subscription("https://e/2")
         assert tx.subscriptions_for("priya") == []
 

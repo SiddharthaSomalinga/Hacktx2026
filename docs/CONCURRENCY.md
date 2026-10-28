@@ -86,7 +86,7 @@ WHERE sent_at IS NULL ORDER BY id LIMIT %s FOR UPDATE SKIP LOCKED
   Deadlines compare timestamps that different instances wrote, so clock skew between servers
   moves a deadline by the skew. NTP keeps that to milliseconds, against thresholds measured
   in seconds.
-- **Connections.** Processes × instances × pools × `DB_POOL_SIZE` must stay under the
+- **Connections.** Processes × instances × pools × `DB_POOL_SIZE` has to fit within the
   database's `max_connections` (ARCHITECTURE §11).
 - **Map snapshots.** Each process caches a building's map for `MAP_CACHE_S` (1 s), so two
   instances can show a seat change up to 1 s apart. The cache is derived, never written back.

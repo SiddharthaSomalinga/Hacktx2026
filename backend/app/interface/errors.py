@@ -9,6 +9,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from app.interface.observability import request_id
 from app.services.errors import DomainError
 from app.services.ports import Unavailable
 
@@ -49,4 +50,8 @@ def install(app: FastAPI) -> None:
     @app.exception_handler(Exception)
     async def unexpected(request: Request, exc: Exception) -> JSONResponse:
         log.exception("unhandled error on %s %s", request.method, request.url.path, exc_info=exc)
-        return _body("internal_error", "Something went wrong on our side", 500)
+        response = _body("internal_error", "Something went wrong on our side", 500)
+        rid = request_id.get()
+        if rid is not None:  # this handler runs outside RequestContext, which tags the others
+            response.headers["X-Request-ID"] = rid
+        return response

@@ -20,6 +20,7 @@ from app.domain.types import Topic
 from app.services.ai_guard import GuardedAI
 from app.wiring import build_ai
 from tests.conftest import make_settings
+from tests.fakes import RecordingMetrics
 
 KEY = "test-muse-key"
 Handler = Callable[[httpx.Request], httpx.Response]
@@ -248,7 +249,8 @@ def test_slow_provider_is_cut_off_at_the_timeout(slow_server: str) -> None:
 
 
 def test_guarded_muse_failure_gives_the_fallback_answer() -> None:
-    broken = GuardedAI(muse(lambda r: httpx.Response(503)))
+    metrics = RecordingMetrics()
+    broken = GuardedAI(muse(lambda r: httpx.Response(503)), metrics)
     fallback = FallbackAI()
     hosts = [Host("a", ORGO), Host("b", TREES)]
     assert broken.normalize_topic("orgo 1 exam prep") == fallback.normalize_topic(
@@ -256,6 +258,7 @@ def test_guarded_muse_failure_gives_the_fallback_answer() -> None:
     )
     assert broken.rank_hosts(ORGO, hosts) == fallback.rank_hosts(ORGO, hosts)
     assert broken.icebreaker(ORGO, TREES) == fallback.icebreaker(ORGO, TREES)
+    assert metrics.ai_fallbacks == ["normalize_topic", "rank_hosts", "icebreaker"]
 
 
 def test_wiring_picks_muse_only_with_a_key() -> None:

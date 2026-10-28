@@ -641,6 +641,10 @@ class PostgresTx:
             (sent_at, attempts, row_id),
         )
 
+    def outbox_unsent(self) -> int:
+        row = self._one("SELECT count(*) AS n FROM notification_outbox WHERE sent_at IS NULL")
+        return int(row["n"]) if row else 0
+
     # --- scheduler -----------------------------------------------------------
 
     def due_search_ids(self, now: datetime, human_fresh_before: datetime) -> list[str]:

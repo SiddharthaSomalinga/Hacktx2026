@@ -1,17 +1,23 @@
-"""The operational scripts' pure parts: VAPID keys, QR sheet, fake-node payload, seeding, cards."""
+"""The operational scripts' pure parts: VAPID keys, demo env, QR sheet, fake-node payload,
+seeding, cards."""
 
 from __future__ import annotations
 
 import base64
+import re
+import stat
+from pathlib import Path
 
 import pytest
 from py_vapid import Vapid  # the class pywebpush signs with
 
 from scripts import card_images
+from scripts.demo_env import KEYS, write_once
 from scripts.fake_node import STATES, FakeNode
 from scripts.seat_qr import seat_url, sheet
 from scripts.seed_history import sensed
 from scripts.vapid_keys import generate
+from tests.conftest import make_settings
 
 
 def _unb64(s: str) -> bytes:
@@ -62,3 +68,16 @@ def test_card_images_cover_every_card_key_and_reject_non_png() -> None:
     webp = {"data": [{"b64_json": base64.b64encode(b"RIFF....WEBP").decode()}]}
     with pytest.raises(ValueError):
         card_images.parse_png(webp)
+
+
+def test_demo_env_is_written_once_private_and_shell_safe(tmp_path: Path) -> None:
+    path = tmp_path / "demo.env"
+    assert write_once(path, {"NODE_KEY": "e2e-node-key-0123456789"})
+    first = path.read_text()
+    values = dict(line.split("=", 1) for line in first.splitlines())
+    assert tuple(values) == KEYS and values["NODE_KEY"] == "e2e-node-key-0123456789"
+    assert all(re.fullmatch(r"[A-Za-z0-9_@.:-]+", v) for v in values.values())  # sourced by sh
+    assert stat.S_IMODE(path.stat().st_mode) == 0o600
+    make_settings(**{k.lower(): v for k, v in values.items()})  # the app accepts every value
+    assert not write_once(path, {})
+    assert path.read_text() == first  # a restart keeps sessions and subscriptions valid

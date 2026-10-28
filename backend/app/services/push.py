@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 
 from app.services.context import Context
-from app.services.ports import PushResult
+from app.services.ports import PushOutcome, PushResult
 
 log = logging.getLogger("ghostseats.push")
 
@@ -46,9 +46,11 @@ class PushService:
                 attempts = row.attempts + 1
                 if failed and attempts < self._ctx.push_max_attempts:
                     tx.mark_outbox(row.id, None, attempts)  # retried on a later tick
+                    self._ctx.metrics.count_push(PushOutcome.RETRY)
                     continue
                 if failed:
                     log.warning("giving up on outbox row %d after %d attempts", row.id, attempts)
                 tx.mark_outbox(row.id, self._ctx.clock.now(), attempts)
+                self._ctx.metrics.count_push(PushOutcome.GAVE_UP if failed else PushOutcome.SENT)
                 finished += 1
         return finished
