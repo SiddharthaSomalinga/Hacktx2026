@@ -7,13 +7,13 @@ numbers (`D18`, see the decision log in `PLAN.md`) instead of restating them.
 ## 1. System at a glance
 
 ```
- seat: micro switch (object) + HC-05 link (human) + LED
+ seat: one IR sensor + two LEDs (as built, Q14)
         │ digital pins
  ┌──────▼───────┐  USB serial 115200   ┌──────────────┐  HTTPS + X-Node-Key  ┌──────────────────────────┐
- │ Arduino R4   │ ── R,10,00 ────────► │ Raspberry Pi │ ─ POST /api/readings►│ Backend (FastAPI) × N    │
- │ firmware/    │ ◄─ L,Y,G ─────────── │ bridge/      │ ◄─ {leds:{…}} ───────│ backend/                 │
- └──────────────┘  (REQUIREMENTS §10.3)└──────────────┘    every 2 s         │ engine · matching · AI   │
-   local mode after 10 s silence (HW-5)                                      │ scheduler tick · outbox  │
+ │ Arduino      │ ─ occupied: true ──► │ laptop       │ ─ POST /api/readings►│ Backend (FastAPI) × N    │
+ │ firmware/    │                      │ bridge/      │ ◄─ {leds:{…}} ───────│ backend/                 │
+ └──────────────┘                      └──────────────┘  change + heartbeat  │ engine · matching · AI   │
+   LEDs follow the IR reading                                                │ scheduler tick · outbox  │
                                                                              └──┬──────────▲─────────┬──┘
                                                          SQL (primary + read)   │          │ JSON    │ web push
                                                                  ┌──────────────▼───┐ ┌────┴───────┐ │ (VAPID)
@@ -23,8 +23,9 @@ numbers (`D18`, see the decision log in `PLAN.md`) instead of restating them.
                                                                  └──────────────────┘ └────────────┘
 ```
 
-The backend is the single source of truth for seat state. The only exception
-is the node's local fallback (HW-5).
+The backend is the single source of truth for seat state. As built, the firmware's
+LEDs follow its own IR reading and the bridge only logs the `leds` the backend returns
+(Q21); the serial protocol in REQUIREMENTS §10.3 was never implemented.
 
 ### Hardware parts
 
@@ -48,7 +49,8 @@ IR for `object_present`. Nothing in the backend changes for it.
 
 ```
 /
-├── docs/                      # REQUIREMENTS · USER_FLOWS · ARCHITECTURE · PLAN · PROGRESS
+├── compose.yaml · Makefile    # `docker compose up` / `make demo`: the whole stack locally (D60)
+├── docs/                      # REQUIREMENTS · USER_FLOWS · ARCHITECTURE · CONCURRENCY · PLAN · PROGRESS
 ├── backend/                   # FastAPI service (backend role, v1backend)
 │   ├── app/
 │   │   ├── main.py            # create_app(settings, services); static mount of frontend/dist
@@ -57,12 +59,12 @@ IR for `object_present`. Nothing in the backend changes for it.
 │   │   ├── worker.py          # scheduler tick + outbox sender (a thread per instance)
 │   │   ├── domain/            # pure logic, no I/O (§3)
 │   │   ├── services/          # use cases, lifecycle coordinator, ports.py, facts.py
-│   │   ├── adapters/          # repo_postgres, history_sql, ai_fallback, push_webpush, db, clock
+│   │   ├── adapters/          # repo_postgres, history_sql, ai_fallback, push_webpush, metrics_prometheus, db, clock
 │   │   └── interface/         # schemas.py (the contract), deps.py, errors.py, routes/
 │   ├── sql/                   # schema.sql, seed.sql
-│   ├── scripts/               # db, fake_node, seed_history, seat_qr, vapid_keys, load_check
+│   ├── scripts/               # db, fake_node, seed_history, seat_qr, vapid_keys, load_check, demo_env
 │   ├── tests/                 # domain/, api/, repo_contract/, fakes.py (in-memory repository)
-│   ├── deploy/                # compose.yaml, provision.sh, deploy.sh (rolling, D36)
+│   ├── deploy/                # compose.yaml, provision.sh, deploy.sh (rolling, D36), entrypoint.sh
 │   ├── Dockerfile             # API + worker + frontend/dist; built from the repo root
 │   └── pyproject.toml · uv.lock · Makefile · .env.example · .gitignore
 ├── bridge/                    # arduino_bridge.py: serial ⇄ POST /api/readings, env config (D39)
@@ -89,16 +91,18 @@ and an import-guard test enforces that.
 | `domain/catalog.py` | UT course codes → title and subject; keyword aliases | FR-18, 19 |
 | `domain/topic_rules.py` | Fallback normalizer, fallback icebreaker, `card_key_for` | §9 |
 | `domain/notifications.py` | Which transition emits which outbox `kind` and payload (first name and major only before accept, D43) | FR-52, 53 |
-| `services/ports.py` | `Repository`, `TopicAI`, `Notifier`, `Clock` protocols | — |
+| `services/ports.py` | `Repository`, `TopicAI`, `Notifier`, `Clock`, `Metrics` protocols | — |
 | `services/lifecycle.py` | Applies `advance_*` decisions under row locks; the one place where host, search and match transitions trigger each other | NFR-2, D29 |
 | `services/facts.py` | Per-transaction snapshot answering "what state is this seat" and "is this host findable", identically for every service | FR-24 |
 | `services/ai_guard.py` | Wraps any `TopicAI`: an exception or out-of-bounds output becomes the deterministic fallback | NFR-3 |
 | `services/topics.py` | `topic_cache` in front of `normalize_topic` | §9 |
-| `services/*.py` | `readings`, `map`, `history`, `auth`, `host`, `search`, `requests`, `match`, `safety`, `push`, `scheduler` | — |
+| `services/*.py` | `readings`, `map`, `history`, `auth`, `host`, `search`, `requests`, `match`, `safety`, `push`, `scheduler`, `metrics` | — |
 | `adapters/repo_postgres.py` | All SQL, parameterized only | — |
 | `adapters/ai_fallback.py`, `ai_muse.py` | `TopicAI` implementations (§8) | NFR-3 |
 | `adapters/push_webpush.py` | `Notifier` over `pywebpush` | FR-51..53 |
+| `adapters/metrics_prometheus.py` | `Metrics` over `prometheus_client`; sums every uvicorn process's samples when `PROMETHEUS_MULTIPROC_DIR` is set (D60) | — |
 | `interface/routes/*.py` | Parse, call one service, return. No business `if`s | §7 |
+| `interface/observability.py` | Request id per request (echoed as `X-Request-ID`), one access line with the route template, JSON log lines when `LOG_FORMAT=json` (D60) | — |
 
 **Ports and fakes (D3).** `Repository` has two implementations,
 `PostgresRepository` and `InMemoryRepository` (`tests/fakes.py`). Both pass
@@ -325,26 +329,27 @@ class TopicAI(Protocol):                     # services/ports.py
 - **Seeding.** `scripts/seed_history.py` writes change-only rows for seats with no readings in the window. It never deletes, so it is safe on a live database.
 - **Verification.** The repository conformance suite runs the same scenarios against the in-memory reference and against Postgres (including carry-in from before the window, silent-seat capping and the partial current hour). That suite caught two SQL bugs the in-memory tests could not (PROGRESS, Session 3).
 
-## 11. Deployment topology (D5, D32)
+## 11. Deployment topology (D5, D32, D57)
 
 ```
- phones / PWA ──HTTPS──► load balancer ──► FastAPI × N (API + frontend/dist + worker thread each)
- Pi bridge ──HTTPS + X-Node-Key──┘                 │ primary: writes, locks      │ read URL: map, history, recommend
-                                                   ▼                             ▼
-                                             Tiger Data primary ───────► read replica (optional)
+ phones / PWA ──HTTPS──► Caddy :443 ──► FastAPI container (API + frontend/dist + worker thread)
+ bridge ──HTTPS + X-Node-Key──┘         │ primary: writes, locks      │ read URL: map, history, recommend
+ (server 2: the same stack at           ▼                             ▼
+  its own address, hot backup)   Tiger Data primary ───────► read replica (optional)
  dev:  Vite :5173 ──proxy /api──► uvicorn :8000
+ demo: compose.yaml ── db (Timescale) · init (schema, seed, keys) · api (the deploy image)
 ```
 
 - **One origin.** The session cookie stays SameSite=Lax with no CORS, and the service worker scope covers the app.
 - **N instances** are safe because no state of record lives in memory (NFR-8). The scheduler uses `SKIP LOCKED` (§14), and caches are derived (§5).
 - **Connection budget (D34).** Every process opens a primary pool of `DB_POOL_SIZE` (default 5), plus a replica pool when `DATABASE_READ_URL` is set. Processes × instances × pools × `DB_POOL_SIZE` must stay below the database's `max_connections`. The local Timescale image allows 25, and 4 workers × 5 peaked at exactly 20 under load.
 - **Outages (D35).** Connection failures become `Unavailable` in the repository and a 503 `database_unavailable` with `Retry-After: 5` at the API, after at most the 5 s pool wait. `/api/health` reports `db: false`.
-- **Host (D36, D37).** Two Vultr Cloud Compute instances in New Jersey behind a Vultr Load Balancer (Auto SSL, health check `GET /api/health`), on a `.tech` domain whose DNS is on Vultr. Deploys roll one instance at a time. Fallback: a laptop behind a `cloudflared` tunnel.
-- **Network.** The Pi and the phones use the public URL. A phone hotspot is the backup network.
+- **Host (D57, replacing D36's load balancer and D37's domain).** Two Vultr instances (1 vCPU, 2 GB, 2 GB swap), each running the same image from `backend/deploy/compose.yaml` with Caddy in front for HTTPS (Let's Encrypt on `<ip>.sslip.io`). Server 1 is the public URL; server 2 is a hot backup at its own address, so failing over means changing the URL. The container port is published on 127.0.0.1 only, so traffic reaches it through Caddy. `deploy.sh` updates one server at a time and waits for the container health check before the next.
+- **Network.** The bridge and the phones use the public URL. A phone hotspot is the backup network.
 
 ## 12. Frontend architecture (v2, `v2-frontendredo`, D44–D52)
 
-React 19, TypeScript strict, Vite 8, at the repo root (D6). One `src/api/client.ts` makes every
+React 19, TypeScript strict, Vite 8, in `frontend/` (D6, D59). One `src/api/client.ts` makes every
 request: same origin, cookies, `cache: 'no-store'`, `{error, message}` → `ApiError`, and an ETag
 store that sends `If-None-Match` on the two buildings endpoints. API types are generated from the
 live OpenAPI (`npm run api:types` → `src/api/schema.gen.ts`).
@@ -394,6 +399,7 @@ worker thread (each instance, `app/worker.py`):
 
 - **Transactional outbox.** The notification row commits with the transition, so a push failure never rolls back a state change and a committed transition is never missing its notification.
 - **`SKIP LOCKED`** means N instances never pick the same row. Duplicates are impossible within one outbox row.
+- **Failure cases and the tests behind them:** [CONCURRENCY.md](CONCURRENCY.md).
 - **Payloads** (`domain/notifications.py`):
   - `request_received`: the seeker's first name and major, the course and the host's table label (D43).
   - `request_accepted`: the host's first name, allowed after accept (FR-43).

@@ -20,7 +20,7 @@ Built by 4 people at HackTX 2026, Sat 6 pm → Sun 11:30 am. The tag [`hacktx-20
 
 | Piece | Status |
 |---|---|
-| Seat sensing | **Real, one sensor.** The prototype has a single IR sensor per seat; those were the parts available at the hackathon. One IR sensor can't tell a person from a bag, so the bridge sends its value as both `object_present` and `human_present` |
+| Seat sensing | **Real, one sensor.** The prototype has a single IR sensor per seat; those were the parts available at the hackathon. A single IR beam can't distinguish a person from a bag, so the bridge sends its value as both `object_present` and `human_present` |
 | Ghost-seat detection (`likely_opening`) | **Modeled in the backend, not reachable from the prototype.** It needs "object yes, human no", which one IR sensor never reports. `make fake-node` can send it (`1 b`). Planned upgrade: a thermal sensor for the person plus IR for belongings, feeding the two fields the backend already reads |
 | Demo hosts | **Simulated** (D56). With `DEMO_HOSTS=true`, `make seed-demo` creates one host per catalog course, and they accept requests after `DEMO_ACCEPT_S` (5 s) |
 | Desk installation diagram | **Concept**, below |
@@ -31,7 +31,7 @@ Built by 4 people at HackTX 2026, Sat 6 pm → Sun 11:30 am. The tag [`hacktx-20
 
 <p align="center"><img src="docs/images/hardware_prototype.jpg" width="520" alt="Arduino prototype with IR sensor and LEDs"/></p>
 
-The prototype is an Arduino with a Grove shield, one IR sensor on D2, and two LEDs that the firmware drives itself: **green = open, blue = occupied**, matching the map. The firmware ([`firmware/HACKATHON`](firmware/HACKATHON/HACKATHON.ino)) needs 3 consistent reads (sampled every 50 ms) before it switches, and prints a text line, `occupied: true|false`, over USB serial at 115200 baud. [`bridge/arduino_bridge.py`](bridge/arduino_bridge.py) parses that line and posts JSON to `POST /api/readings` with an `X-Node-Key` header, on every change and at least every heartbeat.
+The prototype is an Arduino with a Grove shield, one IR sensor on D2, and two LEDs that the firmware drives itself: **green = open, blue = occupied**, matching the map. The firmware ([`firmware/HACKATHON`](firmware/HACKATHON/HACKATHON.ino)) needs 3 consistent reads (sampled every 50 ms) before it switches, and prints a text line, `occupied: true|false`, over USB serial at 115200 baud. [`bridge/arduino_bridge.py`](bridge/arduino_bridge.py) parses that line and posts JSON to `POST /api/readings` with an `X-Node-Key` header, whenever the reading changes, and every 2 s regardless.
 
 ```
 Arduino (IR + LEDs) --serial text--> bridge (Python) --HTTP JSON--> FastAPI --> TimescaleDB
@@ -62,7 +62,7 @@ def public_state(s: SeatState, now: datetime, t: Timers) -> PublicState:
 - A new reading becomes the seat's state only once it has been stable for `DEBOUNCE_S` (5 s).
 - `away_since` is the moment belongings-only started, so the 30 s ghost timer includes the debounce.
 - A seat with no reading for `OFFLINE_S` (30 s) is `offline`, whatever it was before.
-- The away duration is used here and never returned by the API.
+- The away duration only feeds this decision; the API never exposes it.
 - `now` and the timers are parameters. The domain layer has no clock, database or env access, and a test fails if it imports one.
 
 Every threshold lives in [`backend/app/config.py`](backend/app/config.py) and can be overridden by env var. Transitions happen when a seat is read, when its node reports, or on a 2 s scheduler tick; the tick selects due rows `FOR UPDATE SKIP LOCKED`, so every instance can run the tick. The full state machines (seat, host, request, match) are in [ARCHITECTURE](docs/ARCHITECTURE.md).
@@ -79,6 +79,23 @@ A host taps their seat (or scans its QR code) and types what they're studying, e
 
 Each call has a 4 s timeout (`AI_TIMEOUT_S`) and a deterministic fallback, and none runs inside a database lock, so a slow or failed AI call never blocks a request. Before a host accepts, the seeker sees only first name and major; the seat location is revealed after accept. Names are never sent to Muse.
 
+## Running several instances
+
+Each instance runs its own scheduler tick and push sender against the shared database, so Postgres does the coordinating. The push sender claims its work with:
+
+```sql
+SELECT id, user_id, kind, payload, attempts FROM notification_outbox
+WHERE sent_at IS NULL ORDER BY id LIMIT %s FOR UPDATE SKIP LOCKED
+```
+
+- `sent_at IS NULL` is the queue: a row leaves it when its sender commits.
+- `FOR UPDATE` keeps a claimed row away from every other sender until that commit.
+- `SKIP LOCKED` sends the other senders to the next free rows rather than making them wait.
+- The push goes out before the commit. A process that dies between the two leaves the row unsent, and another sender pushes it again: at-least-once.
+- The row itself was inserted in the same transaction as the state change behind it, so a push that fails never undoes a transition.
+
+Transitions re-read their row `FOR UPDATE` and re-check before acting, and partial unique indexes (one pending request per search, one active match per person) refuse a duplicate even if a lock were missing. [CONCURRENCY](docs/CONCURRENCY.md) covers each mechanism and the five Postgres tests that fail when its lock is removed.
+
 ## Stack
 
 | Part | Choice |
@@ -89,11 +106,22 @@ Each call has a 4 s timeout (`AI_TIMEOUT_S`) and a deterministic fallback, and n
 | Database | PostgreSQL 16 + TimescaleDB (hypertable, compression, retention) |
 | AI | Meta Muse Spark, behind a timeout and a rule-based fallback |
 | Frontend | React 19, TypeScript, Vite, MapLibre GL, installable PWA with web push |
+| Observability | JSON logs with a request id per request, Prometheus `/metrics` behind a token |
 | Hosting | Vultr |
+
+## Try it
+
+With Docker, from the repo root:
+
+```bash
+docker compose up --build     # same as: make demo
+```
+
+Then open <http://localhost:8000> (or set `PORT=8001` first if 8000 is taken). The first start pulls the 3.2 GB database image and builds the app image. A one-shot `init` job creates the schema, seeds three buildings with a day of history and one demo host per course, and generates the keys into a Docker volume. Demo hosts are on, so a search and Join ends in a match with nobody else around. To act as the sensor, run `docker compose run --rm fake-node` in a second terminal and type `1 p`, `1 b` or `1 e`. `docker compose down -v` deletes the data and the keys.
 
 ## Run it locally
 
-You need [uv](https://docs.astral.sh/uv/) (it installs Python 3.12), Docker, `make`, and Node 22 or 24 with the npm that ships with it (npm 10+). The database image is 3.2 GB.
+For development, run each piece on its own. You need [uv](https://docs.astral.sh/uv/) (it installs Python 3.12), Docker, `make`, and Node 22 or 24 with the npm that ships with it (npm 10+). The database image is 3.2 GB.
 
 ```bash
 cd backend
@@ -134,32 +162,57 @@ Real hardware: flash `firmware/HACKATHON`, plug in the Arduino, then from the re
 
 | Command | Result |
 |---|---|
-| `cd backend && make check` | ruff, mypy `--strict`, 184 passed, 29 skipped (Postgres tests skip without a DB) |
-| `cd backend && make test-db` | 213 passed, including the Postgres repository contract tests |
+| `cd backend && make check` | ruff, mypy `--strict`, 204 passed, 32 skipped (Postgres tests skip without a DB) |
+| `cd backend && make test-db` | 236 passed, including the Postgres repository contract and concurrency tests |
 | `cd frontend && npm test` | 32 passed (Vitest) |
 | `cd frontend && npm run build` | type-checks the app and service worker, builds the PWA |
+| `cd frontend && npm run e2e` | Playwright, two browser sessions against the compose stack: a request, the host's accept, and the table appearing for the seeker only after it ([TESTING](docs/TESTING.md#automated-checks)) |
 
-`InMemoryRepository` and `PostgresRepository` pass the same contract suite in `backend/tests/repo_contract/`. `make load-check` runs 500 polling clients and 50 fake nodes against a running API.
+`InMemoryRepository` and `PostgresRepository` pass the same contract suite in `backend/tests/repo_contract/`.
 
-## Limitations
+## Load
 
-- Presence comes from one IR sensor, so the prototype can't produce `likely_opening`. The thermal + IR upgrade is the first thing to build.
-- The prototype firmware ignores the LED colors the backend returns, and the backend's LED colors (red for occupied) don't match the firmware and map (blue). The map is the reference (D54).
-- Push delivery is at-least-once through a transactional outbox, so a notification can arrive twice.
-- The frontend polls every 3 s; there is no WebSocket.
-- Demo hosts are simulated, and there is no real account system: sign-in is a demo-user picker.
+`cd backend && make load-check` runs simulated phones that poll the map the way the app does (every 3 s, sending `If-None-Match`), plus 50 fake nodes posting every 2 s, against a running API, then removes its test data. Measured on an Apple M1 (8 GB) with the API as 4 uvicorn workers (JSON logs and metrics on), Postgres in Docker (4 CPUs, 2 GB), and the generator on the same laptop:
+
+| 500 phones, 3 runs × 60 s | p50 | p95 | max |
+|---|---|---|---|
+| `GET /api/buildings/pcl` (mostly 304) | 1.9–2.4 ms | 7–29 ms | 0.13–1.0 s |
+| `GET /api/buildings` | 2.2–2.6 ms | 17–70 ms | 0.17–1.5 s |
+| `POST /api/readings` | 26–31 ms | 75–203 ms | 0.26–1.5 s |
+
+That is the full offered load, about 355 requests/s, with no errors in 64,000 requests. Max is the single slowest request of a run, and p95 varied up to fourfold between runs of the same code, on a laptop that was also running Docker and an editor.
+
+1000 phones (685 requests/s) kept the map routes' p50 under 3 ms. At 2000 phones, 2050 open connections, it broke: p50 rose to 0.05–0.5 s and p95 to 1.6–5 s, node posts fell behind, and a few requests timed out. During those runs the server's own histogram (`/metrics`, timed from the middleware) kept the map routes' p95 at 10 ms or less, and 680 phones polling every second, the same request rate over a third of the connections, stayed at a p50 of 4 ms. So the limit was concurrent connections on this laptop, not the request rate or the database. No process was CPU-bound, swap activity didn't change, and neither 8 server workers nor 16 generator processes helped. With both ends on one machine I couldn't narrow it further; the next run puts the generator on a second machine.
+
+## Limitations and next steps
+
+- Presence comes from one IR sensor, so the prototype can't produce `likely_opening` (below). **Next:** the thermal + IR pair from the table above (D58).
+- The prototype firmware ignores the LED colors the backend returns, and the backend's LED colors (red for occupied) don't match the firmware and map (blue). The map is the reference (D54). **Next:** settle the colors (Q21), then have the firmware show what the backend returns, which also brings the matched-seat beacon.
+- Sign-in is a demo-user picker, and demo hosts are simulated. **Next:** university SSO behind the same auth service (NFR-7).
+- Push is at-least-once, so a notification can arrive twice; the service worker tags it by URL, so the second replaces the first on screen.
+- The frontend polls every 3 s; there is no WebSocket. On one laptop the stack carried 1000 polling phones but not 2000 open connections (Load).
+- Instances read time from their own clocks, so clock skew between servers shifts deadlines by the skew ([CONCURRENCY](docs/CONCURRENCY.md)).
+- The two servers have no load balancer (D57). Server 2 is a hot backup at its own address, so failing over means changing the URL.
+
+## At the hackathon
+
+Two things went wrong that shaped what's here.
+
+- **The venue Wi-Fi blocked database ports and SSH.** Outbound 5432 and Tiger's port timed out even to an unrelated host while HTTPS worked. The app itself was unaffected: phones and the bridge talk only to the public HTTPS URL, and the servers reach Tiger from Vultr's network. What did break was operator work from the laptop, applying the schema and deploying over SSH, so that ran over a phone hotspot.
+- **The parts came down to one IR sensor per seat.** The design called for two signals per seat, an object and a person (the original plan was a micro switch and a Bluetooth presence link). One IR sensor reads a bag and a person the same way, so the bridge sends its one value as both, and the ghost-seat state the project is built around can't come from the prototype. The backend kept the two-signal model, so the hardware fix is a second sensor, with no backend change.
 
 ## Design
 
 | Doc | Covers |
 |---|---|
 | [ARCHITECTURE](docs/ARCHITECTURE.md) | Layers, the four state machines, push, scaling to several instances |
+| [CONCURRENCY](docs/CONCURRENCY.md) | Row locks, `SKIP LOCKED`, the outbox, and the tests that fail without them |
 | [REQUIREMENTS](docs/REQUIREMENTS.md) | FR/NFR ids, the API contract, config keys, the data model |
 | [USER_FLOWS](docs/USER_FLOWS.md) | Every screen and what the user can do on it |
 | [TESTING](docs/TESTING.md) | Features with manual test steps |
 | [backend README](backend/README.md) | Running, testing and deploying the API |
 
-[PLAN](docs/PLAN.md) (decisions D1–D59, open questions) and [PROGRESS](docs/PROGRESS.md) (what was run, per session) are the build log.
+[PLAN](docs/PLAN.md) (decisions D1–D60, open questions) and [PROGRESS](docs/PROGRESS.md) (what was run, per session) are the build log.
 
 ## Team
 

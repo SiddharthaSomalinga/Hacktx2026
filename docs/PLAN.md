@@ -671,3 +671,21 @@ URL; server 2 is a hot backup at its own address. Both use Tiger Data. Deploy:
   fake-node`, labeled as such; the hardware is no longer available.
 - Merged through a PR; branch cleanup and a redeploy from `main` follow the merge.
 - License deferred to the team (Q22).
+
+**D60 — Engineering pass on `v4-engineering`.** The author's call, after an outside review's
+second tier.
+- `docker compose up` (or `make demo`) at the repo root runs the whole stack: Timescale, a
+  one-shot `init` job (schema, seed, policies, history, demo hosts, keys generated into a
+  volume) and the deploy image with demo hosts on. No in-memory runtime: it would need a second
+  seed path and break NFR-8 by design.
+- Logs: `LOG_FORMAT=json` (the image's default) writes one JSON object per line with a request
+  id, echoed as `X-Request-ID`.
+- Metrics: `GET /metrics` serves Prometheus text behind `METRICS_TOKEN`, summed over every uvicorn
+  process through `PROMETHEUS_MULTIPROC_DIR`. It is outside `/api` and not part of the client
+  contract (§7). REQUIREMENTS §8 gains the three settings; the author agreed for the team.
+- CI's image job became `e2e`: it builds the image through compose and runs a Playwright test
+  from request to revealed location.
+- `docs/CONCURRENCY.md` documents the locks and the outbox with the tests that fail without them.
+  The README gains load results and a postmortem.
+- The deploy publishes the API port on localhost only.
+- Out of scope: a real presence sensor; the hardware is no longer available (D58).

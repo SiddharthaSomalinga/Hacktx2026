@@ -15,6 +15,7 @@ dependencies = [
     "segno>=1.6,<2",
     "py-vapid>=1.9,<2",
     "cryptography>=42",
+    "prometheus-client>=0.26,<1",
 ]
 
 [dependency-groups]

@@ -13,6 +13,7 @@ from app.services.host import HostService
 from app.services.lifecycle import LifecycleService
 from app.services.map import MapService
 from app.services.match import MatchService
+from app.services.metrics import MetricsService
 from app.services.push import PushService
 from app.services.readings import ReadingsService
 from app.services.requests import RequestService
@@ -38,10 +39,11 @@ class Services:
     safety: SafetyService
     push: PushService
     scheduler: SchedulerService
+    metrics: MetricsService
 
     @staticmethod
     def build(ctx: Context) -> Services:
-        ctx = replace(ctx, ai=GuardedAI(ctx.ai))  # NFR-3 for every caller
+        ctx = replace(ctx, ai=GuardedAI(ctx.ai, ctx.metrics))  # NFR-3 for every caller
         lifecycle = LifecycleService(ctx)
         topics = TopicsService(ctx)
         requests = RequestService(ctx, lifecycle)
@@ -60,4 +62,5 @@ class Services:
             safety=SafetyService(ctx),
             push=PushService(ctx),
             scheduler=SchedulerService(ctx, lifecycle, requests),
+            metrics=MetricsService(ctx),
         )

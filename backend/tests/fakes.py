@@ -31,7 +31,7 @@ from app.domain.types import (
     Topic,
     User,
 )
-from app.services.ports import Conflict, Lock, PushResult, PushSubscription
+from app.services.ports import Conflict, Lock, PushOutcome, PushResult, PushSubscription
 
 T0 = datetime(2026, 10, 24, 18, 0, 0, tzinfo=UTC)
 HOUR = timedelta(hours=1)
@@ -63,6 +63,31 @@ class FakeNotifier:
         if result is PushResult.SENT:
             self.sent.append((subscription.endpoint, dict(payload)))
         return result
+
+
+class RecordingMetrics:
+    """`Metrics` that keeps every call, for asserting what the app reports."""
+
+    def __init__(self) -> None:
+        self.requests: list[tuple[str, str, int]] = []
+        self.ticks: list[int] = []
+        self.pushes: list[PushOutcome] = []
+        self.ai_fallbacks: list[str] = []
+
+    def observe_request(self, method: str, route: str, status: int, seconds: float) -> None:
+        self.requests.append((method, route, status))
+
+    def observe_tick(self, seconds: float, due: int) -> None:
+        self.ticks.append(due)
+
+    def count_push(self, outcome: PushOutcome) -> None:
+        self.pushes.append(outcome)
+
+    def count_ai_fallback(self, call: str) -> None:
+        self.ai_fallbacks.append(call)
+
+    def render(self, outbox_unsent: int) -> tuple[bytes, str]:
+        return f"outbox_unsent {outbox_unsent}\n".encode(), "text/plain; charset=utf-8"
 
 
 @dataclass(frozen=True)
@@ -318,6 +343,9 @@ class InMemoryTx:
     def mark_outbox(self, row_id: int, sent_at: datetime | None, attempts: int) -> None:
         entry = self.d.outbox[row_id - 1]
         entry.sent_at, entry.attempts = sent_at, attempts
+
+    def outbox_unsent(self) -> int:
+        return sum(1 for e in self.d.outbox if e.sent_at is None)
 
     # Scheduler
     def _absent_before(self, seat_id: str, before: datetime) -> bool:

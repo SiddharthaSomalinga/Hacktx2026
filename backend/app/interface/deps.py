@@ -1,4 +1,4 @@
-"""Request-scoped dependencies: services, the logged-in user, the node key."""
+"""Request-scoped dependencies: services, the logged-in user, the node and metrics keys."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from typing import Annotated
 from fastapi import Depends, Header, Path, Request
 
 from app.services.container import Services
-from app.services.errors import unauthorized
+from app.services.errors import not_found, unauthorized
 
 
 def get_services(request: Request) -> Services:
@@ -39,6 +39,17 @@ def require_node_key(request: Request, x_node_key: Annotated[str | None, Header(
     expected: str = request.app.state.node_key
     if x_node_key is None or not hmac.compare_digest(x_node_key.encode(), expected.encode()):
         raise unauthorized("invalid_node_key", "Missing or wrong X-Node-Key header")
+
+
+def require_metrics_token(
+    request: Request, authorization: Annotated[str | None, Header()] = None
+) -> None:
+    expected: str | None = request.app.state.metrics_token
+    if expected is None:
+        raise not_found("not_found", "Not Found")  # metrics are off; don't advertise them
+    scheme, _, supplied = (authorization or "").partition(" ")
+    if scheme != "Bearer" or not hmac.compare_digest(supplied.encode(), expected.encode()):
+        raise unauthorized("invalid_metrics_token", "Missing or wrong bearer token")
 
 
 # Ids in URL paths are bounded like every other input (security floor §2).

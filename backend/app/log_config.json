@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "disable_existing_loggers": false,
+  "formatters": {"json": {"()": "app.interface.observability.JsonFormatter"}},
+  "handlers": {"stderr": {"class": "logging.StreamHandler", "formatter": "json"}},
+  "root": {"level": "INFO", "handlers": ["stderr"]},
+  "loggers": {
+    "uvicorn": {"level": "INFO", "handlers": [], "propagate": true},
+    "uvicorn.error": {"level": "INFO", "handlers": [], "propagate": true},
+    "uvicorn.access": {"handlers": [], "propagate": false}
+  }
+}
