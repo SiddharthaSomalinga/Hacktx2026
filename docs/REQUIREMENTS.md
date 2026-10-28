@@ -25,6 +25,7 @@ Decision numbers refer to `PLAN.md`, decision log.
 - **FR-31 (D56)** Demo mode lets simulated hosts take and accept requests; off by default.
 - **§7 (D53)** `GET /api/seats/:id`; block and report by request or match id; ids on the match and search status.
 - **HW-7 (D62)** The bridge's backend URL setting is `SYNAPSE_URL`; `GHOSTSEATS_URL` still works.
+- **FR-10, §7, §8 (D61)** A live stream, `GET /api/live`, keeps the map and the user's own state current; polling is the fallback. `SEARCH_STALL_S` and the `LIVE_*` keys.
 - **§6** Adds `buildings.lat/lng`, `keywords`, `offered_group`, change-only `seat_readings` with offline markers, `push_subscriptions` and `notification_outbox`. **§7** New and changed endpoints, node key, error codes. **§8** New keys and an environment table.
 
 # 1. Overview
@@ -76,7 +77,7 @@ occupancy history and push notifications.
 
 - **FR-8** The client shall show all buildings with counts of open, likely-opening, occupied and offline seats, colored by open share (green ≥ 30%, yellow 10–29%, red < 10%, grey offline).
 - **FR-9** The client shall show a building's floors, tables and seats with each seat's public state.
-- **FR-10** The client shall refresh map data every `POLL_WEB_S` without a page reload.
+- **FR-10** The client shall keep map data current without a page reload: over the live stream (`GET /api/live`, D61) while it is healthy, otherwise by polling every `POLL_WEB_S`.
 - **FR-11** The backend shall recommend one seat for the client's current selection. It searches the selected table first, then that table's floor, then the whole building. At each level an open seat is preferred, and a likely-opening seat (labeled as such) is chosen only if no seat is open. Ties go to the seat nearest the selection, then the lowest seat position. If the building has no open or likely-opening seat, the response names the nearest building that has open seats. The response states the level at which the seat was found.
 - **FR-12** The recommended seat shall be highlighted with a style distinct from all seat-state colors.
 - **FR-13** Simulated buildings shall be visibly labeled as simulated.
@@ -261,6 +262,7 @@ JSON over HTTPS. Errors: `{"error": "<code>", "message": "<sentence>"}` with a 4
 | GET /api/push/vapid-public-key | None | | `{key}` |
 | POST /api/push/subscribe | Login | `{endpoint, keys: {p256dh, auth}}` | `{ok}` |
 | DELETE /api/push/subscribe | Login | `{endpoint}` | `{ok}` |
+| GET /api/live?building=&last_event_id= | None (the session cookie, if any, adds per-user events) | `building` optional; `last_event_id` optional, for a reopen without the `Last-Event-ID` header | `text/event-stream`; see below (D61) |
 
 **`GET /api/buildings/:id` shape.** `x` and `y` are percentages of the floor canvas (0–100):
 
@@ -275,13 +277,36 @@ JSON over HTTPS. Errors: `{"error": "<code>", "message": "<sentence>"}` with a 4
 }
 ```
 
+**`GET /api/live` (D61).** One stream per open app. Events, as `event: <name>` + `data:` lines:
+
+| Event | Data | When |
+|---|---|---|
+| `buildings` | Exactly the body of `GET /api/buildings` | On connect, then whenever it changes |
+| `building` | Exactly the body of `GET /api/buildings/:id` for `building` | The same, only when `building` is given |
+| `invalidate` | A JSON array of topics from `me`, `search`, `inbox`, `match` | Something the logged-in user's GET of that topic returns may have changed |
+| `ping` | `{"db": bool, "hints": bool}` | At least every `POLL_WEB_S` with nothing else to send |
+
+- The first message is `retry:`, `LIVE_RETRY_S` in ms with ±50% jitter.
+- Every event's `id:` is `<buildings version>.<building version or ->`, where a version is the
+  snapshot's `ETag` without quotes. On reconnect the client sends it back (`Last-Event-ID`, or
+  `last_event_id`), and an unchanged snapshot is not resent.
+- `invalidate` carries topic names only: no ids, names or seats. The client refetches the
+  topic through its usual GET, which applies the usual authorization. Streams without a
+  session cookie never receive it.
+- A `ping` is sent only while the snapshots it confirms were rebuilt successfully. `db: false`
+  means the last rebuild failed (the client treats the stream as unavailable); `hints: false`
+  means change hints are not arriving, so per-user events may be late and the client polls
+  per-user state.
+- Errors before the stream starts are the usual JSON: 404 `building_not_found`, 404
+  `live_disabled`, 503 `database_unavailable`.
+
 **Error codes:**
 
 | Status | Codes |
 |---|---|
 | 401 | `not_logged_in`, `invalid_node_key` |
 | 403 | `not_your_search`, `not_your_request`, `not_in_match` |
-| 404 | `unknown_user`, `building_not_found`, `table_not_found`, `seat_not_found`, `search_not_found`, `request_not_found`, `match_not_found` |
+| 404 | `unknown_user`, `live_disabled`, `building_not_found`, `table_not_found`, `seat_not_found`, `search_not_found`, `request_not_found`, `match_not_found` |
 | 409 | `seat_not_occupied`, `seat_taken`, `not_linked`, `already_hosting`, `already_searching`, `no_real_hosts`, `request_not_pending`, `search_not_active`, `match_not_active`, `confirm_not_due` |
 | 422 | `validation_error` |
 | 429 | `rate_limited` |
@@ -303,7 +328,7 @@ JSON over HTTPS. Errors: `{"error": "<code>", "message": "<sentence>"}` with a 4
 | BLINK_S | 60 | Blue blink duration |
 | SESSION_MAX_S | 10800 | Host session confirmation interval |
 | CONFIRM_GRACE_S | 120 | Time to answer the confirmation prompt |
-| POLL_WEB_S | 3 | Client polling interval |
+| POLL_WEB_S | 3 | Fallback polling interval, and the live stream's heartbeat (D61) |
 | AI_TIMEOUT_S | 4 | AI call timeout |
 | MAX_REQUESTS_PER_HOUR | 10 | Per seeker |
 | SIM_SLOT_S | 60 | Simulated-state time slot |
@@ -312,6 +337,11 @@ JSON over HTTPS. Errors: `{"error": "<code>", "message": "<sentence>"}` with a 4
 | HISTORY_WINDOW_H | 24 | History chart window (Q12) |
 | READINGS_RETENTION_DAYS | 30 | Raw reading retention (Q12) |
 | PUSH_MAX_ATTEMPTS | 5 | Delivery attempts per notification before giving up |
+| SEARCH_STALL_S | 10 | A joined search with no pending request for this long is advanced by the scheduler (D61) |
+| LIVE_CHECK_S | 1 | How often each instance re-checks the snapshots its live streams watch; also the shortest gap between two broadcasts of one snapshot (D61) |
+| LIVE_FEED_PROBE_S | 30 | How often the change listener proves its database connection (D61) |
+| LIVE_RETRY_S | 2 | Reconnect delay the stream suggests to the client, jittered ±50% (D61) |
+| LIVE_STALL_S | 30 | A stream whose client stops reading for this long is closed (D61) |
 
 **Environment** (secrets and deployment, never committed):
 
@@ -332,6 +362,7 @@ JSON over HTTPS. Errors: `{"error": "<code>", "message": "<sentence>"}` with a 4
 | DB_TIMEOUT_S | No | Bound on each database wait: a pooled connection, connecting, each round trip (default 5, D41) |
 | LOG_FORMAT | No | `text` (default) or `json`: one JSON object per line with the request id (D60). The image sets `json` |
 | METRICS_TOKEN | No | Bearer token for `GET /metrics` (at least 16 characters). Unset, `/metrics` is a 404 (D60) |
+| LIVE_ENABLED | No | Serve `GET /api/live` (default `true`); `false` answers 404 `live_disabled` and clients poll (D61) |
 | PROMETHEUS_MULTIPROC_DIR | No | Directory the uvicorn processes share metric samples through, so one scrape covers all of them. The image sets it |
 
 # 9. AI integration
