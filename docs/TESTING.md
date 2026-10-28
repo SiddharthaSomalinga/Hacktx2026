@@ -101,6 +101,9 @@ link it prints on both devices.
 |---|---|---|
 | Demo login and restore (FR-16, D9) | Log in, reload on any screen | Same screen after reload; a match or search reopens from `/` |
 | Freshness pill (D46) | Watch the top bar; stop the database (`docker stop ghostseats-db`) | Live → "Unable to refresh" / "Offline · data from N s ago"; back to Live after `docker start` |
+| Live stream (D61) | Open a floor plan; DevTools → Network; run the stand-in node and type `1 p` | One `/api/live` request stays open (EventStream tab: `building` and `ping` events); the chair turns occupied within a second; no `/api/buildings` requests repeat |
+| Stream fallback (D61) | DevTools → Network → block `/api/live`, reload | After about 6 s the map polls every 3 s as before; the pill still says Live |
+| Inbox without polling (D61) | Host from a chair, then ask to join from a second browser | The request card appears on the host's screen with no repeating `/api/host/inbox` requests |
 | Back button and deep links | Open `/b/pcl/2/pcl-2-t1` in a new tab, press the in-app back arrow | Goes up to `/b/pcl/2`, not out of the app |
 | Dark mode (D47) | Account or settings menu → Dark; or the system setting | A separate dark palette; the map restyles too |
 | Accessibility | Tab through; turn on VoiceOver; set Reduce Motion | Visible focus everywhere; chairs read "Table 01 seat 2, open"; no animation with Reduce Motion |
@@ -113,10 +116,10 @@ link it prints on both devices.
 
 | Command | Covers |
 |---|---|
-| `npm test` (`frontend/`) | FR-8 colors, floor layout on every seeded floor, polling and backoff, freshness, notification URLs, push body |
+| `npm test` (`frontend/`) | FR-8 colors, floor layout on every seeded floor, polling and backoff, freshness, notification URLs, push body, the live stream's state machine and when queries poll, countdown re-anchoring |
 | `npm run build` (`frontend/`) | Typecheck of the app and the service worker, then the production build |
-| `make check` / `make test-db` (`backend/`) | API, services and repository, including the D53 additions |
-| `npm run e2e` (`frontend/`) | In a browser, against the compose stack: a seeker asks, the host accepts, and the table appears for the seeker only after the accept (FR-43) |
+| `make check` / `make test-db` (`backend/`) | API, services and repository, including the D53 additions. For D61: the hub, the route, hints from every writer in both repositories, the sweep, a seeded random walk in which every change a user can see must have been hinted, and (Postgres) NOTIFY across two instances |
+| `npm run e2e` (`frontend/`) | In a browser, against the compose stack: a seeker asks, the host accepts, and the table appears for the seeker only after the accept (FR-43). The live stream: a seat change on screen with no polling, no `/api/me` polling when logged out, the inbox filled by a hint, and polling as the fallback when the stream is blocked |
 
 The browser test needs the stack running with demo hosts off and a known node key, so the test
 can play the sensor. From the repo root:

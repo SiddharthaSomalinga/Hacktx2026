@@ -80,14 +80,38 @@ WHERE sent_at IS NULL ORDER BY id LIMIT %s FOR UPDATE SKIP LOCKED
 - A failed send leaves the row unsent with `attempts + 1`, and it is retried on later ticks
   up to `PUSH_MAX_ATTEMPTS` (5). A 404 or 410 from the push service deletes the subscription.
 
-## 4. What the database doesn't cover
+## 4. Live hints are sent by the commit
+
+Each process holds its own live streams (D61), so a change committed on one instance must
+reach streams on all of them. Postgres `NOTIFY` does that, and its transactional rules are
+why it is safe:
+
+```sql
+SELECT pg_notify(%s, p) FROM unnest(%s::text[]) AS p   -- channel synapse_live, run just before COMMIT
+```
+
+- A notification is delivered only when its transaction commits. A rolled-back write hints
+  nothing, so no stream refetches for a change that never happened.
+- Notifications reach every listener in commit order, and identical ones within one
+  transaction are folded into one.
+- Each process listens on one unpooled connection. A hint only says "look again"; the hub
+  re-reads the snapshot, so a lost hint costs latency, never correctness. The periodic
+  rebuild every `LIVE_CHECK_S` bounds that latency.
+- A listener that stops reading would fill Postgres's notification queue (8 GB by default),
+  and then committing transactions that NOTIFY would fail. Each listener reads continuously
+  and proves its connection with a self-notification every `LIVE_FEED_PROBE_S`.
+- The scheduler's sweep (ARCHITECTURE §14) runs on every instance, so a time-driven hint can
+  arrive once per instance. Clients don't restart a refetch already in flight, which folds
+  the duplicates.
+
+## 5. What the database doesn't cover
 
 - **Clocks.** Services read `now` from their own instance's clock, not from Postgres.
   Deadlines compare timestamps that different instances wrote, so clock skew between servers
   moves a deadline by the skew. NTP keeps that to milliseconds, against thresholds measured
   in seconds.
-- **Connections.** Processes × instances × pools × `DB_POOL_SIZE` has to fit within the
-  database's `max_connections` (ARCHITECTURE §11).
+- **Connections.** Processes × instances × (pools × `DB_POOL_SIZE` + 1 live listener) has
+  to fit within the database's `max_connections` (ARCHITECTURE §11).
 - **Map snapshots.** Each process caches a building's map for `MAP_CACHE_S` (1 s), so two
   instances can show a seat change up to 1 s apart. The cache is derived, never written back.
 
@@ -106,6 +130,14 @@ Each lock was removed in turn, the test run, and the code restored:
 | `test_concurrent_drains_send_each_notification_once` | 4 drains over 20 rows; a barrier in the notifier holds every drain's first send until all have claimed | `FOR UPDATE SKIP LOCKED` | the sorted send log starts `[0, 0, 0, 0, 1, 1, …]`: every drain claimed the same rows |
 | same | same | `SKIP LOCKED` only | the drains queue behind the first one's rows, the barrier times out, and the queued drains hit `DB_TIMEOUT_S` (`Unavailable`) |
 | `test_seat_lock_keeps_a_reading_and_a_concurrent_blink` | an ingest while a transaction holds the seat row to set `blink_until` | `FOR UPDATE` in `lock_seat_state` | the ingest finished within 0.5 s while the row was held |
+
+The live hints have their own Postgres tests, also run by `make test-db`:
+
+| Test | Shows | Broken on purpose | Result |
+|---|---|---|---|
+| `tests/repo_contract/test_live_hints.py` (both repositories) | each write hints the right users and buildings; a rollback hints nothing | the flush before COMMIT removed | every Postgres hint test fails |
+| `tests/test_live_feed_pg.py::test_a_killed_listener_reconnects_and_says_resync` | `pg_terminate_backend` on the listener → `Lost`, then `Resync`, then hints again | — | — |
+| `tests/test_live_feed_pg.py::test_a_write_on_one_instance_reaches_a_stream_on_another` | two instances on one database; the periodic rebuild set to 30 s, so only NOTIFY can deliver within 1 s | — | — |
 
 The concurrent-ticks test used to pass for the wrong reason. Its setup posted a sensor
 reading after expiring the request, and that ingest advanced the search itself, so the six

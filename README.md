@@ -37,7 +37,7 @@ The prototype is an Arduino with a Grove shield, one IR sensor on D2, and two LE
 Arduino (IR + LEDs) --serial text--> bridge (Python) --HTTP JSON--> FastAPI --> TimescaleDB
                                                                         |  \--> Muse (topic, ranking, icebreaker)
                                                                         v
-                                                              React PWA (polls every 3 s, web push)
+                                                              React PWA (SSE: GET /api/live, web push)
 ```
 
 **Concept** for a real desk: an object sensor on the desk surface and a presence sensor aimed at the chair, per seat, with one controller per table.
@@ -95,6 +95,21 @@ WHERE sent_at IS NULL ORDER BY id LIMIT %s FOR UPDATE SKIP LOCKED
 - The row itself was inserted in the same transaction as the state change behind it, so a push that fails never undoes a transition.
 
 Transitions re-read their row `FOR UPDATE` and re-check before acting, and partial unique indexes (one pending request per search, one active match per person) refuse a duplicate even if a lock were missing. [CONCURRENCY](docs/CONCURRENCY.md) covers each mechanism and the five Postgres tests that fail when its lock is removed.
+
+## Live updates
+
+An open app holds one Server-Sent Events stream, `GET /api/live`. Over it come the campus counts, the plan of whichever building is on screen, and, once you're logged in, the names of your screens that need refetching. A write on any instance reaches streams on every instance through Postgres `NOTIFY`, sent by the transaction itself:
+
+```sql
+SELECT pg_notify('synapse_live', p) FROM unnest(%s::text[]) AS p   -- just before COMMIT
+```
+
+- `NOTIFY` is transactional: a write that rolls back sends nothing, so no client refetches for a change that never happened.
+- Each process `LISTEN`s on one extra connection and keeps one copy of each watched snapshot, rebuilt at once on a hint and every `LIVE_CHECK_S` (1 s) regardless. The periodic rebuild catches what changes with time alone (the ghost timer, a sensor going silent) and anything a lost notification missed. A hint only says when to look again.
+- The work is one rebuild per watched building per process, whatever the number of phones. A changed snapshot is written to every stream. A stream that reads slowly gets the newest state, never a backlog.
+- Snapshot events are byte for byte the bodies of the polling GETs. Per-user events name topics only (`["inbox","me"]`), never ids or names; the client refetches through the usual endpoints and their checks.
+- The repository's writers record the hints, not the services. `save_seat_state` requires the seat's computed change, so code that writes seat state can't forget to hint. A seeded random walk of readings, clock jumps and user actions checks the rest. After every step, any user whose GET responses changed must have received a hint.
+- If the stream can't vouch for its data for 6 s, the app polls every 3 s as before.
 
 ## Stack
 
@@ -162,27 +177,39 @@ Real hardware: flash `firmware/HACKATHON`, plug in the Arduino, then from the re
 
 | Command | Result |
 |---|---|
-| `cd backend && make check` | ruff, mypy `--strict`, 204 passed, 32 skipped (Postgres tests skip without a DB) |
-| `cd backend && make test-db` | 236 passed, including the Postgres repository contract and concurrency tests |
-| `cd frontend && npm test` | 32 passed (Vitest) |
+| `cd backend && make check` | ruff, mypy `--strict`, 256 passed, 44 skipped (Postgres tests skip without a DB) |
+| `cd backend && make test-db` | 300 passed, including the Postgres repository contract, concurrency and `NOTIFY` tests |
+| `cd frontend && npm test` | 50 passed (Vitest) |
 | `cd frontend && npm run build` | type-checks the app and service worker, builds the PWA |
-| `cd frontend && npm run e2e` | Playwright, two browser sessions against the compose stack: a request, the host's accept, and the table appearing for the seeker only after it ([TESTING](docs/TESTING.md#automated-checks)) |
+| `cd frontend && npm run e2e` | Playwright against the compose stack, 5 tests: a request, the host's accept, and the table appearing for the seeker only after it; a seat change on screen with no polling; no `/api/me` polling when logged out; the inbox filled by a hint; polling when the stream is blocked ([TESTING](docs/TESTING.md#automated-checks)) |
 
 `InMemoryRepository` and `PostgresRepository` pass the same contract suite in `backend/tests/repo_contract/`.
 
 ## Load
 
-`cd backend && make load-check` runs simulated phones that poll the map the way the app does (every 3 s, sending `If-None-Match`), plus 50 fake nodes posting every 2 s, against a running API, then removes its test data. Measured on an Apple M1 (8 GB) with the API as 4 uvicorn workers (JSON logs and metrics on), Postgres in Docker (4 CPUs, 2 GB), and the generator on the same laptop:
+`cd backend && make load-check` runs simulated phones against a running API, then removes its test data. `--mode poll` polls the map the way the app used to (every 3 s, with `If-None-Match`); `--mode sse` holds `/api/live` open. With `--setup`, a probe seat flips every 12 s. The delay is from the probe's readings response to the moment a phone shows the new state.
 
-| 500 phones, 3 runs × 60 s | p50 | p95 | max |
-|---|---|---|---|
-| `GET /api/buildings/pcl` (mostly 304) | 1.9–2.4 ms | 7–29 ms | 0.13–1.0 s |
-| `GET /api/buildings` | 2.2–2.6 ms | 17–70 ms | 0.17–1.5 s |
-| `POST /api/readings` | 26–31 ms | 75–203 ms | 0.26–1.5 s |
+Apple M1 (8 GB), API as 4 uvicorn workers with JSON logs and metrics on, Postgres in Docker (4 CPUs, 2 GB), the generator on the same laptop. Ranges are over 3 runs of 60 s.
 
-That is the full offered load, about 355 requests/s, with no errors in 64,000 requests. Max is the single slowest request of a run, and p95 varied up to fourfold between runs of the same code, on a laptop that was also running Docker and an editor.
+| 1000 phones, quiet building (only the probe changes) | Polling | Stream |
+|---|---|---|
+| Change on screen, p50 | 1.64–1.95 s | 67–73 ms |
+| Change on screen, p95 | 3.24–3.47 s | 94–113 ms |
+| Phone requests | 659–665/s | 17/s (the connects) |
+| Server CPU, mean, all workers | 31–41% of a core | 12–14% |
+| Database transactions | 29–31/s | 19/s |
 
-1000 phones (685 requests/s) kept the map routes' p50 under 3 ms. At 2000 phones, 2050 open connections, it broke: p50 rose to 0.05–0.5 s and p95 to 1.6–5 s, node posts fell behind, and a few requests timed out. During those runs the server's own histogram (`/metrics`, timed from the middleware) kept the map routes' p95 at 10 ms or less, and 680 phones polling every second, the same request rate over a third of the connections, stayed at a p50 of 4 ms. So the limit was concurrent connections on this laptop, not the request rate or the database. No process was CPU-bound, swap activity didn't change, and neither 8 server workers nor 16 generator processes helped. With both ends on one machine I couldn't narrow it further; the next run puts the generator on a second machine.
+| 2000 phones, 50 nodes rewriting a 200-seat floor every 2 s | Polling | Stream |
+|---|---|---|
+| `POST /api/readings`, p50 | 0.36–1.5 s, nodes starved (720–1071 of ~1460 posts) | 35–38 ms, all posts |
+| Change on screen, p95 | 6.4–10.1 s | 1.19–1.46 s |
+| Flips a phone never showed | 253–1996 | 0 |
+| Received per phone | 2.1–3.2 KB/s | 9.4–9.9 KB/s |
+
+- Polling at 2000 phones broke the way it did before: about 2000 connections each making a request every 3 s. The same 2000 phones as streams cost the server 35–43% of a core.
+- Under churn the stream is slower than in a quiet building because each building's snapshot goes out at most once per `LIVE_CHECK_S`. A change waits up to 1 s for its turn.
+- The stream costs about three times the bytes under churn: every update is the whole 200-seat floor plan, about once a second. Sending only the seats that changed would remove most of that.
+- At 4000 streams under the same churn, streams went silent for more than 9 s and dropped (14,178 read timeouts), with the server at about one core writing snapshots. At 8000, connects failed against the laptop's file limits (`kern.maxfiles` 30720, two descriptors per phone with both ends local). So the ceiling here is the bytes, between 2000 and 4000 streams. A run with the generator on another machine is the next step.
 
 ## Limitations and next steps
 
@@ -190,7 +217,8 @@ That is the full offered load, about 355 requests/s, with no errors in 64,000 re
 - The prototype firmware ignores the LED colors the backend returns, and the backend's LED colors (red for occupied) don't match the firmware and map (blue). The map is the reference. **Next:** agree the LED colors with the hardware side, then have the firmware show what the backend returns, which also brings the matched-seat beacon.
 - Sign-in is a demo-user picker, and demo hosts are simulated. **Next:** university SSO behind the same auth service.
 - Push is at-least-once, so a notification can arrive twice; the service worker tags it by URL, so the second replaces the first on screen.
-- The frontend polls every 3 s; there is no WebSocket. On one laptop the stack carried 1000 polling phones but not 2000 open connections (Load).
+- Live updates send whole snapshots, so a busy building costs about three times the bytes of polling, and one laptop topped out between 2000 and 4000 streams (Load). **Next:** per-seat deltas.
+- The load numbers come from one laptop with the generator on it. They show the relative cost of the two modes, not the capacity of a server.
 - Instances read time from their own clocks, so clock skew between servers shifts deadlines by the skew ([CONCURRENCY](docs/CONCURRENCY.md)).
 - The two servers have no load balancer. Server 2 is a hot backup at its own address, so failing over means changing the URL.
 

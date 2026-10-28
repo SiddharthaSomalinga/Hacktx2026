@@ -137,6 +137,16 @@ commit when green.
 2. ⬜ Three full rehearsals on the venue network with all roles.
 3. ⬜ Merge `v1 → main`; root README (what it is, run/test commands, key decisions); Devpost.
 
+### B7 — Live stream (D61, `v6-live`)
+1. ✅ Contract: FR-10, §7 `GET /api/live`, §8 `SEARCH_STALL_S` and `LIVE_*`.
+2. ✅ Bugs polling hid: a stalled search resumes after `SEARCH_STALL_S`; countdowns re-anchor on every fetch.
+3. ✅ Hints recorded by every repository writer (`WRITE_EFFECTS`), sent before COMMIT through `NOTIFY`; LISTEN feed with probe and reconnect. Contract tests on both repositories; NOTIFY across two instances.
+4. ✅ `LiveHub`: periodic and hinted rebuilds, latest-wins streams, pings, health.
+5. ✅ Sweep for time-only per-user changes; tick completeness and a seeded random walk.
+6. ✅ Route, stream metrics, bounded shutdown (`--timeout-graceful-shutdown 6`), `nofile`.
+7. ✅ Frontend: `useLive`, polling only when the stream can't vouch for the data; browser tests.
+8. 🚧 `load_check --mode sse` and `proc_sample`; laptop results ✅ (PROGRESS); a run on server 2 ⬜ (needs a push and a deploy).
+
 ## Frontend checklist — software partner (`v1frontend`)
 
 Ticked for `v2-frontendredo` (D44).
