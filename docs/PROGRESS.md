@@ -752,6 +752,11 @@ Caught before committing:
    That is long enough for a send in flight, so ticks on four processes don't each call Muse
    for the same search. New worker test (failed before the fix) and a contract test. 239 pass
    with Postgres.
+2. **A countdown could keep the previous request's clock.** Cause: `useCountdown` re-anchored
+   only when `seconds_left` changed, so a new request that again reported 300 kept counting
+   from the old anchor. Polling hid it within 3 s; with event-driven refetches it would stay.
+   Fix: the countdown is anchored on the query's `dataUpdatedAt`, which moves on every fetch,
+   and the arithmetic is a pure `remainingAt`, tested with two fetches that both report 300.
 
 ## Next steps
 1. **Before redeploying,** check each server's Caddyfile upstream (bug 1). Then

@@ -117,9 +117,9 @@ function Preview({ id, status, stored }: { id: string; status: SearchStatus; sto
   )
 }
 
-function Waiting({ id, status }: { id: string; status: SearchStatus }) {
+function Waiting({ id, status, fetchedAt }: { id: string; status: SearchStatus; fetchedAt: number }) {
   const navigate = useNavigate()
-  const left = useCountdown(status.seconds_left)
+  const left = useCountdown(status.seconds_left, fetchedAt)
   const announce = useAnnounce()
   const asking = status.asking
   const name = asking?.first_name
@@ -224,6 +224,6 @@ export function SearchScreen() {
   }
   if (!st) return <Loading label="Checking your search…" />
   if (st.status === 'matched') return <Loading label="They said yes. Opening your match…" />
-  if (st.status === 'active') return st.joined ? <Waiting id={searchId} status={st} /> : <Preview id={searchId} status={st} stored={stored?.result ?? null} />
+  if (st.status === 'active') return st.joined ? <Waiting id={searchId} status={st} fetchedAt={status.dataUpdatedAt} /> : <Preview id={searchId} status={st} stored={stored?.result ?? null} />
   return <Ended status={st} stored={stored} />
 }
