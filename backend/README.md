@@ -159,20 +159,26 @@ every 2 s, and then removes the load-test data.
 
 | Endpoint, 3 runs × 60 s | p50 | p95 | max |
 |---|---|---|---|
-| `GET /api/buildings/pcl` (mostly 304) | 2.7–2.8 ms | 15–36 ms | 231–901 ms |
-| `GET /api/buildings` | 3.1–3.2 ms | 34–78 ms | 315–1064 ms |
-| `POST /api/readings` | 35–37 ms | 113–232 ms | 289–1012 ms |
+| `GET /api/buildings/pcl` (mostly 304) | 1.9–2.4 ms | 6.8–28.5 ms | 129–1015 ms |
+| `GET /api/buildings` | 2.2–2.6 ms | 17.1–70.1 ms | 168–1478 ms |
+| `POST /api/readings` | 25.7–31.1 ms | 75.3–202.7 ms | 257–1549 ms |
 
-- **Setup.** Apple M1, 8 GB, macOS 14.6. Four uvicorn worker processes. Postgres in Docker
-  Desktop's VM (4 CPUs, 2 GB). The generator ran on the same laptop as 4 processes.
-- **Throughput.** About 355 requests/s, which is the full offered load. One transport error in
-  about 21,000 requests, in the first run; the max spikes are also first-run warm-up.
-- **The generator was the first bottleneck.** My first runs showed p95 above a second, and
-  adding server workers made it worse. Measuring CPU per process showed the single-process
-  generator at 70% of a core while each server worker sat at 7–17% and Postgres at 19%. Those
-  numbers measured the generator, not the backend.
-- **Upper bound unknown.** These numbers say the backend keeps up at this load; they do not
-  find its limit.
+- **Setup.** Apple M1, 8 GB, macOS 14.6. Four uvicorn workers with `LOG_FORMAT=json` and
+  `PROMETHEUS_MULTIPROC_DIR`, as in the image. Postgres in Docker Desktop's VM (4 CPUs, 2 GB).
+  The generator ran on the same laptop as 4 processes.
+- **Throughput.** About 355 requests/s, the full offered load, with no errors in 63,997
+  requests.
+- **The ramp.** `ARGS="--clients 1000 --procs 6"`: 685 requests/s, map p50 under 3 ms, no errors.
+  `ARGS="--clients 2000 --procs 8"`, three runs: p50 52–339 ms on the building, p95 1.6–4.0 s,
+  readings starved (921–1221 posts instead of about 1450), up to 3 timeouts.
+- **What broke was connections, not requests.** The server-side histogram from `/metrics`,
+  diffed across a 2000-client run, put p95 at ≤ 10 ms for both map routes and ≤ 100 ms for
+  readings. `ARGS="--clients 680 --poll 1 --procs 8"` offers the same rate over 730 connections
+  and got 1291 requests/s at a p50 of 4 ms. Instantaneous CPU never passed 24% for any server
+  worker or 31% for any generator process, swap-ins stayed at the idle rate, and the kernel
+  counted no listen-queue overflows. 8 server workers (with `DB_POOL_SIZE=2`) and 16 generator
+  processes were no better. The generator and the server share the laptop, so the next step
+  is a generator on a second machine.
 - **Building list rarely 304s.** Its counts change every second under random node traffic, so
   its ETag rarely repeats. The building detail is mostly 304.
 

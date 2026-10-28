@@ -162,13 +162,27 @@ Real hardware: flash `firmware/HACKATHON`, plug in the Arduino, then from the re
 
 | Command | Result |
 |---|---|
-| `cd backend && make check` | ruff, mypy `--strict`, 184 passed, 29 skipped (Postgres tests skip without a DB) |
-| `cd backend && make test-db` | 213 passed, including the Postgres repository contract tests |
+| `cd backend && make check` | ruff, mypy `--strict`, 204 passed, 32 skipped (Postgres tests skip without a DB) |
+| `cd backend && make test-db` | 236 passed, including the Postgres repository contract and concurrency tests |
 | `cd frontend && npm test` | 32 passed (Vitest) |
 | `cd frontend && npm run build` | type-checks the app and service worker, builds the PWA |
 | `cd frontend && npm run e2e` | Playwright, two browser sessions against the compose stack: a request, the host's accept, and the table appearing for the seeker only after it ([TESTING](docs/TESTING.md#automated-checks)) |
 
-`InMemoryRepository` and `PostgresRepository` pass the same contract suite in `backend/tests/repo_contract/`. `make load-check` runs 500 polling clients and 50 fake nodes against a running API.
+`InMemoryRepository` and `PostgresRepository` pass the same contract suite in `backend/tests/repo_contract/`.
+
+## Load
+
+`cd backend && make load-check` runs simulated phones that poll the map every 3 s with `If-None-Match`, as the app does, plus 50 fake nodes posting every 2 s, against a running API, then removes its test data. Measured on an Apple M1 (8 GB) with the API as 4 uvicorn workers (JSON logs and metrics on), Postgres in Docker (4 CPUs, 2 GB), and the generator on the same laptop:
+
+| 500 phones, 3 runs × 60 s | p50 | p95 | max |
+|---|---|---|---|
+| `GET /api/buildings/pcl` (mostly 304) | 1.9–2.4 ms | 7–29 ms | 0.13–1.0 s |
+| `GET /api/buildings` | 2.2–2.6 ms | 17–70 ms | 0.17–1.5 s |
+| `POST /api/readings` | 26–31 ms | 75–203 ms | 0.26–1.5 s |
+
+That is the full offered load, about 355 requests/s, with no errors in 64,000 requests. Max is the single slowest request of a run, and p95 varied up to fourfold between runs of the same code, on a laptop that was also running Docker and an editor.
+
+1000 phones (685 requests/s) kept the map routes' p50 under 3 ms. At 2000 phones, 2050 open connections, it broke: p50 rose to 0.05–0.5 s and p95 to 1.6–5 s, node posts fell behind, and a few requests timed out. During those runs the server's own histogram (`/metrics`, timed from the middleware) kept the map routes' p95 at 10 ms or less, and 680 phones polling every second, the same request rate over a third of the connections, stayed at a p50 of 4 ms. So the limit was concurrent connections on this laptop, not the request rate or the database. No process was CPU-bound, swap activity didn't change, and neither 8 server workers nor 16 generator processes helped. With both ends on one machine I couldn't narrow it further; the next run puts the generator on a second machine.
 
 ## Limitations
 
