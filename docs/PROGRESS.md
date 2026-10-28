@@ -4,10 +4,9 @@ Session log. Concrete changes, commands and observed results only.
 
 ## Current status
 
-- **Milestone:** hackathon over; the demo is tagged `hacktx-2026` (D58). Post-hackathon cleanup
-  (D59) is on `v3-repoaudit`, in review as a PR to `main`. The engineering pass (D60: compose
-  demo, concurrency doc and tests, JSON logs and metrics, browser e2e, load ramp, postmortem)
-  is on `v4-engineering`, cut from `v3-repoaudit`.
+- **Milestone:** hackathon over; the demo is tagged `hacktx-2026` (D58). The post-hackathon
+  cleanup (D59, PR #1) and the engineering pass (D60, PRs #2 and #3) are merged into `main`
+  (`eb8474c`), with CI green.
 - **Live:** `https://64.177.55.143.sslip.io` (server 2 at `45.32.219.190`), D57. Still runs the
   D57 build; nothing from D59 or D60 is deployed.
 - **Tests:** 236 pass with Postgres (`make test-db`); 204 pass and 32 skip without it; bridge 10;
@@ -708,7 +707,6 @@ Caught before committing:
   amended before any push.
 
 ### Not verified
-- CI on `v4-engineering` (not pushed yet), including the new `e2e` job.
 - None of D60 is deployed. Before the next deploy, confirm each server's Caddyfile proxies to
   `localhost:8000` (or `127.0.0.1:8000`), since the port is no longer published on the public
   address.
@@ -716,13 +714,12 @@ Caught before committing:
   `deepmerge`, already present before this session.
 
 ## Next steps
-1. **Review and merge** the `v3-repoaudit` PR, then the `v4-engineering` PR (rebased onto
-   `main`).
-2. **Before redeploying,** check each server's Caddyfile upstream (bug 1). Then
+1. **Before redeploying,** check each server's Caddyfile upstream (bug 1). Then
    `HOSTS="root@64.177.55.143 root@45.32.219.190" make deploy` from `backend/`, and confirm
    `http://<ip>:8000` no longer answers.
-3. **Branch cleanup** after the merges: `v1`, `v1frontend`, `v1backend`, `v1final`,
-   `v2-frontendredo`, `Arduino/Transmitter-Code`; all are contained in `main`.
-4. **Load:** run the generator from a second machine to find where 2000 connections stall.
-5. **Q22:** a license, with the team.
-6. **Q14 / D58:** thermal + IR hardware for real ghost-seat detection.
+2. **Branch cleanup:** `v1`, `v1frontend`, `v1backend`, `v1final`, `v2-frontendredo`,
+   `Arduino/Transmitter-Code`, `v3-repoaudit`, `v4-engineering`, and the `Hacktx2026-v2`
+   worktree; all are contained in `main`.
+3. **Load:** run the generator from a second machine to find where 2000 connections stall.
+4. **Q22:** a license, with the team.
+5. **Q14 / D58:** thermal + IR hardware for real ghost-seat detection.
