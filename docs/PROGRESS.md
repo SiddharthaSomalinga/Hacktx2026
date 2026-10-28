@@ -757,6 +757,10 @@ Caught before committing:
    from the old anchor. Polling hid it within 3 s; with event-driven refetches it would stay.
    Fix: the countdown is anchored on the query's `dataUpdatedAt`, which moves on every fetch,
    and the arithmetic is a pure `remainingAt`, tested with two fetches that both report 300.
+3. **The match browser test failed now and then after passing.** Seen in 1 of 7 full runs on
+   fresh stacks, as "apiRequestContext.post: Request context disposed". Cause: `sensePerson`'s
+   stop only cleared a flag, so a reading in flight could outlive the test and reject once
+   Playwright disposed `request`. Fix: stop awaits the loop. Then 3 of 3 full runs passed.
 
 ## Next steps
 1. **Before redeploying,** check each server's Caddyfile upstream (bug 1). Then

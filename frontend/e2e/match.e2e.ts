@@ -10,8 +10,10 @@ const SEAT = 't1-s1'
 const TABLE = 'Table 01'
 
 /** Plays the node: the host sits on t1-s1 and t1-s2 stays empty. The host must read as present
- * to link the seat, and the table needs an open seat for the host to be findable (FR-24). */
-function sensePerson(request: APIRequestContext): () => void {
+ * to link the seat, and the table needs an open seat for the host to be findable (FR-24).
+ * The returned stop waits for a post in flight: one that outlived the test would reject once
+ * Playwright disposes `request`, failing a test that had passed. */
+function sensePerson(request: APIRequestContext): () => Promise<void> {
   let running = true
   const post = async () => {
     const r = await request.post('/api/readings', {
@@ -26,14 +28,15 @@ function sensePerson(request: APIRequestContext): () => void {
     })
     expect(r.status(), await r.text()).toBe(200)
   }
-  void (async () => {
+  const loop = (async () => {
     while (running) {
       await post()
       await new Promise((resolve) => setTimeout(resolve, 2000))
     }
   })()
-  return () => {
+  return async () => {
     running = false
+    await loop
   }
 }
 
@@ -71,6 +74,6 @@ test('a request reveals the table only after the host accepts', async ({ browser
     await seeker.waitForURL('**/match/**')
     await expect(seekerPanel).toContainText(`PCL Library · Floor 2 · ${TABLE}`)
   } finally {
-    stopSensing()
+    await stopSensing()
   }
 })
