@@ -1,5 +1,5 @@
 ---
-title: "Ghost Seats: Requirements Specification"
+title: "Synapse: Requirements Specification"
 subtitle: "v1.1"
 ---
 
@@ -28,7 +28,7 @@ Decision numbers refer to `PLAN.md`, decision log.
 
 # 1. Overview
 
-Ghost Seats is a web app, installable on phones as a PWA, backed by seat
+Synapse is a web app, installable on phones as a PWA, backed by seat
 sensors. It shows which library seats are open, occupied, or held by
 belongings with no one present ("ghosted"). It also lets students studying the
 same course find each other and sit together.

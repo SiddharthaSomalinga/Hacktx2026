@@ -1,4 +1,4 @@
-# Ghost Seats — Plan
+# Synapse — Plan
 
 Who builds what, in what order, and why. Requirement ids refer to
 `REQUIREMENTS.md` (v1.1), flow steps to `USER_FLOWS.md`, and "ARCH §n" to
@@ -15,7 +15,7 @@ Who builds what, in what order, and why. Requirement ids refer to
 
 | Role | Who | Owns | Branch |
 |---|---|---|---|
-| Backend | Manideep | `backend/`, `documentation/` | `v1backend` |
+| Backend | Manideep | `backend/`, `docs/` | `v1backend` |
 | Frontend | Software partner | The web app and PWA (`frontend/` after D6) | `v1frontend` |
 | Hardware | Hardware pair | `firmware/`, `bridge/`, the physical demo table | `Arduino/Transmitter-Code`; UI and bridge work went to `v1hardsoft`, now `v1final` |
 
@@ -275,7 +275,9 @@ REQUIREMENTS §11, plus WebSockets (FR-10 specifies polling).
 | Q17 | Data-age display when polls fail | Author | F1 | Resolved: D46 |
 | Q18 | Prompt while a role is active; host toggle placement; exhausted search next step | Author | F3 | Resolved: D46, D49 |
 | Q19 | Copy for empty states, hidden reasons, recommendations and errors | Author | F3 | **Open** |
-| Q20 | Whether and when v2 replaces the frontend on `v1final` and `main` | Author, frontend partner | — | **Open** |
+| Q20 | Whether and when v2 replaces the frontend on `v1final` and `main` | Author, frontend partner | — | Resolved: v2 is on `main` (merged before the demo; D59 moves it into `frontend/`) |
+| Q21 | The backend's LED colors (`occupied` → `red`, `likely_opening` → `yellow`) differ from the firmware and map, where occupied is blue (D54). Change the backend LED contract to blue, or leave it until the firmware reads it? | Author, hardware pair | — | **Open** |
+| Q22 | A license for the public repo (MIT or another), and the copyright line | Team | — | **Open** |
 | U1 | Muse Spark and Muse Image access (key, endpoint, auth, JSON mode) | Backend, from Meta sponsors | B4.7, F4.3 | Resolved: key obtained; API per D38. `muse-image-1.0` is on the same API (F4.3) |
 | U2 | Tiger Data: connection limit (sets `DB_POOL_SIZE`) | Backend | Deploy | Resolved: `max_connections` 105 (12 reserved); 2 hosts × 2 workers × 5 = 20, so `DB_POOL_SIZE` stays 5 |
 | U3 | Deploy host (always-on, HTTPS, env vars, ≥ 2 instances) | Backend | B2.4 | Resolved: D36, D37 |
@@ -643,3 +645,29 @@ repo, backend and API keep their existing names.
   scheduler accepts each request `DEMO_ACCEPT_S` (5) after it arrives, through the normal
   accept path (real match, seat, icebreaker). A simulated host's match ends only by expiry.
 - Off by default: without the setting, simulated hosts never receive requests (FR-31, D22).
+
+**D57 — Two independent Vultr servers with Caddy, no load balancer.** The author's call;
+replaces D36's load balancer and D37's DNS requirement. Each server (`64.177.55.143`,
+`45.32.219.190`, 1 vCPU, 2 GB, 2 GB swap) runs the same image with Caddy in front for HTTPS
+(Let's Encrypt, `<ip>.sslip.io` until a domain points at server 1). Server 1 is the public
+URL; server 2 is a hot backup at its own address. Both use Tiger Data. Deploy:
+`HOSTS="root@64.177.55.143 root@45.32.219.190" FRONTEND_DIR=. make deploy REF=origin/v2-frontendredo`.
+
+**D58 — README audit on `v3-repoaudit`; demo tag.** The author's call, after an outside review.
+- The README states only what the code and the prototype do, with a real-vs-simulated table
+  (one IR sensor, simulated demo hosts, concept desk diagram, planned beacon).
+- Planned hardware: thermal for the person plus IR for belongings, feeding the existing
+  `human_present` / `object_present` (Q14).
+- The team section lists the four names only.
+- `hacktx-2026` tags `2197e21`, the last commit before the 11:30 demo.
+- Layout moves, branch deletion, CI and a license are out of scope for this pass.
+
+**D59 — Repo layout, CI, live link, demo GIF.** The author's call, after D58.
+- The frontend lives in `frontend/` (the D6 target) and all docs in `docs/`; `deploy.sh`
+  defaults to `origin/main`.
+- CI on every PR and push to `main`: backend lint, mypy and `make test-db` against Timescale,
+  bridge tests, frontend typecheck/test/build, and the deploy image build.
+- The README links the live server (D57) and shows a screen recording made with `make
+  fake-node`, labeled as such; the hardware is no longer available.
+- Merged through a PR; branch cleanup and a redeploy from `main` follow the merge.
+- License deferred to the team (Q22).

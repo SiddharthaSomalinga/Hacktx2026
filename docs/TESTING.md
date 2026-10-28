@@ -1,6 +1,6 @@
-# Ghost Seats v2 — features and how to test them
+# Synapse v2 — features and how to test them
 
-Covers the app on `v2-frontendredo` (D44) with the backend on `v1backend`. Every check below
+Covers the app on `main` (the v2 frontend, D44, in `frontend/`). Every check below
 was run on a Mac with headless Chromium unless it says **(device)**: those need a real phone.
 
 ## Set up: Mac and phone at the same time
@@ -11,11 +11,11 @@ One device hosts, the other seeks. Both talk to one backend on the Mac.
    device-to-device traffic, so use the phone's hotspot and join it from the Mac.
 2. **Database** (from `backend/`): `make db-up db-create`, then
    `DATABASE_URL=postgresql://postgres:ghostseats@localhost:5433/ghostseats make db-init seed policies`.
-3. **Build the app** (repo root of the v2 worktree): `npm ci && npm run build`.
+3. **Build the app** (from `frontend/`): `npm ci && npm run build`.
 4. **Serve it to the network** (from `backend/`):
    ```bash
    DATABASE_URL=postgresql://postgres:ghostseats@localhost:5433/ghostseats \
-   FRONTEND_DIST="$PWD/../dist" \
+   FRONTEND_DIST="$PWD/../frontend/dist" \
    uv run uvicorn app.main:build --factory --host 0.0.0.0 --port 8000
    ```
    Allow incoming connections if macOS asks.
@@ -113,6 +113,6 @@ link it prints on both devices.
 
 | Command | Covers |
 |---|---|
-| `npx vitest run` (v2 root) | FR-8 colors, floor layout on every seeded floor, polling and backoff, freshness, notification URLs, push body |
-| `npm run build` | Typecheck of the app and the service worker, then the production build |
+| `npm test` (`frontend/`) | FR-8 colors, floor layout on every seeded floor, polling and backoff, freshness, notification URLs, push body |
+| `npm run build` (`frontend/`) | Typecheck of the app and the service worker, then the production build |
 | `make check` / `make test-db` (`backend/`) | API, services and repository, including the D53 additions |

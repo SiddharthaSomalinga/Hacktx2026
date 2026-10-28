@@ -1,14 +1,16 @@
-# PROGRESS.md — Ghost Seats
+# PROGRESS.md — Synapse
 
 Session log. Concrete changes, commands and observed results only.
 
 ## Current status
 
-- **Milestone:** all branches integrated in `v1final` (D40); the two-phone flow works in the
-  browser with live Muse (Session 7). Remaining: the Tiger migration for D43, Q14 (demo-table
-  sensors), and the D36 Vultr deploy.
-- **Tests:** 211 pass with Postgres (`make test-db`); 182 pass and 29 skip without it. Live e2e: 114/114 (Session 6).
-- **Open questions:** Q14, Q19, Q20 (PLAN). Q2, U1, U2 and U3 resolved.
+- **Milestone:** hackathon over; the demo is tagged `hacktx-2026` (D58). Post-hackathon cleanup
+  (README audit, `frontend/` + `docs/` layout, CI, live link, demo GIF) is on `v3-repoaudit`,
+  in review as a PR to `main` (D59).
+- **Live:** `https://64.177.55.143.sslip.io` (server 2 at `45.32.219.190`), D57.
+- **Tests:** 213 pass with Postgres (`make test-db`); 184 pass and 29 skip without it; bridge 10;
+  frontend 32 (Vitest). Live e2e: 114/114 (Session 6).
+- **Open questions:** Q14, Q19, Q21, Q22 (PLAN).
 
 ---
 
@@ -524,17 +526,104 @@ Caught before committing:
   with Skyler (Economics) within 9 s. New test: accepts only after the delay; the match
   survives 600 s with no sensor. `make check` passes.
 
+### Deploy on Vultr (D57)
+- Both servers: Ubuntu 24.04, swap, ufw 80/443, `provision.sh`, Caddy 2.6.2; `/etc/ghostseats.env`
+  from the local `.env` plus `COOKIE_SECURE=true`, `DEMO_HOSTS=true`. Built and started
+  `df12bef` on each: `{"ok":true,"db":true}` (Tiger reachable from Vultr).
+- Tiger, from server 1: `schema.sql`, `seed.sql`, policies, `seed_demo_hosts` (24 added).
+- `https://64.177.55.143.sslip.io` and `https://45.32.219.190.sslip.io`: valid certificates,
+  200. Live check: "macro econ" → join → matched with Skyler in under 10 s, Muse icebreaker,
+  card image 200.
+
+## 2026-10-27 — Session 9: README audit, demo tag (D58)
+
+An outside review of the public repo found README claims the code did not support and a
+quickstart that failed from a fresh clone. Work is on `v3-repoaudit`; nothing pushed.
+
+### Branch and tag
+- `v3-repoaudit` starts at local `v2-frontendredo` (`8b4d296`), which already holds `main`, the
+  unpushed Synapse rename (`63619cd`) and the README title fix.
+- `hacktx-2026` (annotated) → `2197e21`, Sun 11:17, the last commit before the 11:30 demo.
+  Local only.
+- Removed `firmware/Transmitter Code from Arudino.txt`, a Next.js BLE component, not firmware.
+
+### README claims checked against the code
+| README said | Code says |
+|---|---|
+| Human IR sensor plus object IR sensor | One IR sensor on D2; the bridge copies it into both fields (Q14) |
+| Blue = vacant, green = occupied | Firmware and map: green = open, blue = occupied (D54) |
+| Arduino streams JSON | Firmware prints `occupied: true|false`; the bridge sends the JSON |
+| `DEBOUNCE_S = 1s` | `debounce_s = 5` |
+| Vacant / Away / LikelyOpening states | Public states `open`, `occupied`, `likely_opening`, `offline` (FR-6) |
+| React 18, Node 18+ | React 19.3.1; Node `^22.12 || ^24` |
+| "In-memory by default", `pip install -r pyproject.toml`, `backend/scripts/arduino_bridge.py` | None exist; the Makefile flow and `bridge/` do |
+
+The README was rewritten with a real-vs-simulated table, the verified quickstart, measured test
+counts and a limitations section. The team section lists names only.
+
+### Fresh-clone run (scratchpad clone of `v3-repoaudit`, macOS)
+- `make sync db-up db-create`, `make vapid-keys`, `.env` as in the README (fresh database
+  `ghostseats_fresh` in the existing container, dropped afterwards), then
+  `make db-init seed policies seed-history`: "seeded 7269 change rows for 98 seats".
+- API on :8001 (:8000 was taken by the dev server): `/api/health` → `{"ok":true,"db":true}`.
+  `make fake-node --base-url :8001`, `1 p`: `t1-s1` offline → occupied; LEDs `green` → `red`.
+- `npm ci` failed with `EBADENGINE`: Homebrew's npm 7.13 was ahead of Node 24's npm on `PATH`
+  and `.npmrc` sets `engine-strict`. A local leftover, not a repo issue: the 2021 Homebrew
+  npm was moved aside, and plain `npm ci` then passed (0 vulnerabilities).
+- Vite on :5199: page title "Synapse", `/api/health` through the proxy → ok.
+
+### Measured
+- `make check`: ruff, mypy `--strict`, 184 passed, 29 skipped.
+- `make test-db`: 213 passed.
+- `npm test`: 32 passed (7 files). `npm run build`: passes, 77 precache entries.
+
+### Found
+- The backend's LED colors (`occupied` → `red`, `seat_engine._LED`) disagree with the firmware
+  and the map (blue, D54). Not changed; Q21.
+
+## 2026-10-27 — Session 10: layout, CI, live link, demo GIF (D59)
+
+### Layout
+- `git mv` of the frontend into `frontend/`. Its paths are all relative to its own folder, so
+  only docs changed. `backend/deploy/deploy.sh` and `make deploy` now default to `origin/main`;
+  the image already defaulted to `FRONTEND_DIR=frontend`.
+- From `frontend/`: `npm ci` (0 vulnerabilities), `npm run typecheck`, `npm test` (32 passed),
+  `npm run build`. `make image`, then the container against the local DB: `/api/health` ok,
+  `/` title "Synapse", `/seat/t1-s1` 200, `/sw.js` 200.
+- `documentation/*.md` → `docs/`. Live links, the OpenAPI description and the dockerignore entry
+  updated; history entries in PLAN and PROGRESS keep the old path. A script resolving every
+  relative link in the 8 tracked `.md` files: 0 broken. `make check`: 184 passed, 29 skipped.
+- `backend/README.md` deploy notes no longer describe a load balancer (D57).
+
+### ARCHITECTURE
+- §1 hardware: an "as built" paragraph (one IR sensor, laptop bridge, Q14) above the original
+  parts table, which is kept for reference.
+
+### CI (`.github/workflows/ci.yml`)
+- Jobs: `backend` (lint, mypy, `make test-db` against a `timescale/timescaledb-ha:pg16` service),
+  `bridge` (10 tests via uv), `frontend` (typecheck, test, build), `image` (`make image`).
+  Actions pinned to commit SHAs. Bridge command checked locally: 10 passed.
+
+### Live link
+- Live API flow as a demo user: search "macro econ" → join → Skyler (Economics) accepted →
+  matched at Welch floor 2 with a Muse icebreaker; the match was cancelled afterwards.
+- The first attempt sent `"group": false` and got 422 (`group` is `"related"` or null): my
+  request, not a bug.
+
+### Demo GIF (`docs/images/demo.gif`, 6.2 MB, 31 s)
+- Throwaway database `ghostseats_demo` (seeded, `make seed-demo`: 24 hosts), API on :8001 with
+  `DEMO_HOSTS=true GHOST_S=15` serving `frontend/dist`. Playwright recorded the PCL floor 2
+  table while `scripts.fake_node` sent `1 p`, `2 b`, `1 e`, then a seeker (Priya, "orgo exam")
+  → join → Hayden (Chemistry) accepted. Frames checked: open → occupied → likely opening → open,
+  and the match screen with the icebreaker. Database dropped afterwards.
+- `brew install ffmpeg` refused (Command Line Tools too old for macOS 14); used the static
+  ffmpeg from the `imageio-ffmpeg` package instead.
+
 ## Next steps
-1. **Tiger migration (before any deploy of `v1final`):** on a hotspot, from `backend/`, run
-   `make db-init seed`. This adds `users.major` and seeds the majors (D43).
-2. **Q14 (team):** a second sensed seat at the demo table, and a person sensor or a changed
-   demo. Without them the real table cannot host a match or show a ghost seat.
-3. **Deploy (D36, D37):** the Vultr servers, load balancer and `.tech` DNS; `.env.prod`;
-   `make deploy REF=origin/v1final FRONTEND_DIR=.`.
-4. **Hardware pair:** run `bridge/arduino_bridge.py` with `GHOSTSEATS_URL` and `NODE_KEY` set.
-   The real key is given to them privately, never committed.
-5. **Frontend v2 (D44):** device pass on a real iPhone and Android phone (install, push to a
-   locked phone); then Q20, whether v2 replaces the frontend on `v1final`. v2 resolves the old UI
-   items (block/report ids, seat colors, the decorative history curve).
-6. **After the servers work:** fast-forward `main` to `v1final` (D40); print the QR codes for
-   the final domain.
+1. **Review and merge** the `v3-repoaudit` PR into `main` once CI is green.
+2. **Redeploy** both servers from `main`:
+   `HOSTS="root@64.177.55.143 root@45.32.219.190" make deploy` (from `backend/`).
+3. **Branch cleanup** after the merge: `v1`, `v1frontend`, `v1backend`, `v1final`,
+   `v2-frontendredo`, `Arduino/Transmitter-Code`; all are contained in `main`.
+4. **Q22:** a license, with the team.
+5. **Q14 / D58:** thermal + IR hardware for real ghost-seat detection.

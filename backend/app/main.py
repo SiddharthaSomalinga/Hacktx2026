@@ -45,9 +45,9 @@ def create_app(settings: Settings, services: Services) -> FastAPI:
                 worker.stop()
 
     app = FastAPI(
-        title="Ghost Seats API",
+        title="Synapse API",
         version="1.1.0",
-        description="Contract: documentation/REQUIREMENTS.md §7.",
+        description="Contract: docs/REQUIREMENTS.md §7.",
         lifespan=lifespan,
     )
     app.state.services = services
