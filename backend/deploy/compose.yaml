@@ -10,7 +10,9 @@ services:
     image: ghostseats-api:${GIT_SHA:-local}
     env_file: ${ENV_FILE:-/etc/ghostseats.env}
     ports:
-      - "8000:8000"
+      # Localhost only: Caddy on the host is the one client. Docker publishes ports through its
+      # own iptables chain, so ufw alone does not keep a 0.0.0.0 binding off the internet.
+      - "127.0.0.1:8000:8000"
     restart: unless-stopped
     logging:
       driver: json-file

@@ -16,20 +16,22 @@ from app.domain.topic_rules import (
     normalize_fallback,
 )
 from app.domain.types import Topic
-from app.services.ports import HostTopic, TopicAI
+from app.services.ports import HostTopic, Metrics, TopicAI
 
 log = logging.getLogger("ghostseats.ai")
 
 
 class GuardedAI:
-    def __init__(self, inner: TopicAI) -> None:
+    def __init__(self, inner: TopicAI, metrics: Metrics) -> None:
         self._inner = inner
+        self._metrics = metrics
 
     def normalize_topic(self, text: str) -> Topic:
         try:
             return self._inner.normalize_topic(text)
         except Exception as exc:
             log.warning("normalize_topic fell back: %s", type(exc).__name__)
+            self._metrics.count_ai_fallback("normalize_topic")
             return normalize_fallback(text)
 
     def rank_hosts(self, seeker: Topic, hosts: Sequence[HostTopic]) -> dict[str, int]:
@@ -38,6 +40,7 @@ class GuardedAI:
             return {h.id: max(0, min(100, int(scores.get(h.id, 0)))) for h in hosts}
         except Exception as exc:
             log.warning("rank_hosts fell back: %s", type(exc).__name__)
+            self._metrics.count_ai_fallback("rank_hosts")
             return {h.id: keyword_overlap(seeker.keywords, h.topic.keywords) for h in hosts}
 
     def icebreaker(self, a: Topic, b: Topic) -> str:
@@ -48,4 +51,5 @@ class GuardedAI:
             log.warning("icebreaker out of bounds (%d chars); using fallback", len(text))
         except Exception as exc:
             log.warning("icebreaker fell back: %s", type(exc).__name__)
+        self._metrics.count_ai_fallback("icebreaker")
         return icebreaker_fallback(a, b)

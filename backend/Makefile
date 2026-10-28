@@ -12,7 +12,7 @@ sync: ## Install dependencies from uv.lock
 	uv sync --frozen
 
 dev: ## Run the API with reload (reads .env)
-	$(RUN) uvicorn app.main:build --factory --reload --port 8000
+	$(RUN) uvicorn app.main:build --factory --reload --port 8000 --no-access-log
 
 test: ## Unit, service and in-memory contract tests
 	$(RUN) pytest

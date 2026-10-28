@@ -5,11 +5,14 @@ Session log. Concrete changes, commands and observed results only.
 ## Current status
 
 - **Milestone:** hackathon over; the demo is tagged `hacktx-2026` (D58). Post-hackathon cleanup
-  (README audit, `frontend/` + `docs/` layout, CI, live link, demo GIF) is on `v3-repoaudit`,
-  in review as a PR to `main` (D59).
-- **Live:** `https://64.177.55.143.sslip.io` (server 2 at `45.32.219.190`), D57.
-- **Tests:** 213 pass with Postgres (`make test-db`); 184 pass and 29 skip without it; bridge 10;
-  frontend 32 (Vitest). Live e2e: 114/114 (Session 6).
+  (D59) is on `v3-repoaudit`, in review as a PR to `main`. The engineering pass (D60: compose
+  demo, concurrency doc and tests, JSON logs and metrics, browser e2e, load ramp, postmortem)
+  is on `v4-engineering`, cut from `v3-repoaudit`.
+- **Live:** `https://64.177.55.143.sslip.io` (server 2 at `45.32.219.190`), D57. Still runs the
+  D57 build; nothing from D59 or D60 is deployed.
+- **Tests:** 236 pass with Postgres (`make test-db`); 204 pass and 32 skip without it; bridge 10;
+  frontend 32 (Vitest); browser e2e 1 (Playwright, against the compose stack). Live e2e: 114/114
+  (Session 6).
 - **Open questions:** Q14, Q19, Q21, Q22 (PLAN).
 
 ---
@@ -619,11 +622,107 @@ counts and a limitations section. The team section lists names only.
 - `brew install ffmpeg` refused (Command Line Tools too old for macOS 14); used the static
   ffmpeg from the `imageio-ffmpeg` package instead.
 
+## 2026-10-27 — Session 11: engineering pass (D60), branch `v4-engineering`
+
+### Concurrency
+- Two new Postgres tests: four concurrent outbox drains over 20 rows, with a barrier in the
+  notifier so every drain holds its claim at once, send each row exactly once; and an ingest
+  waits on a transaction holding the seat row for `blink_until`, so neither write is lost.
+- Re-ran the lock mutations on current code (each restored after):
+  - `Lock.WAIT` without `FOR UPDATE`: 7 of 8 concurrent advances raise
+    `Conflict('one pending request per search')`.
+  - `claim_outbox` without `FOR UPDATE SKIP LOCKED`: the sorted send log starts
+    `[0, 0, 0, 0, 1, 1, …]`.
+  - With `FOR UPDATE` and no `SKIP LOCKED`: the drains queue, the barrier breaks, the queued
+    drains hit `DB_TIMEOUT_S`.
+  - `lock_seat_state` without `FOR UPDATE`: the ingest finishes within 0.5 s while the row is
+    held.
+  - `Lock.SKIP` with no lock, or with a waiting `FOR UPDATE`: the new tick test's tick is still
+    blocked after 1 s.
+  - `Lock.WAIT` and `Lock.SKIP` both removed: 5 of 6 concurrent ticks raise the `Conflict`.
+- `docs/CONCURRENCY.md`: the three mechanisms with their code, what the database doesn't cover
+  (instance clocks, connection budget, map snapshots), and the tests.
+
+### Observability
+- `app/interface/observability.py`: request id (plain `X-Request-ID` kept, else generated),
+  echoed on every response including the generic 500; one access line with the route template.
+  `LOG_FORMAT=json` loads `app/log_config.json`, which the image also passes to uvicorn as
+  `--log-config`.
+- 2 workers with the image's flags: 28 log lines, all JSON, one access line per request.
+- `GET /metrics` behind `METRICS_TOKEN` (`Metrics` port, `PrometheusMetrics` adapter, `NullMetrics`
+  default). With 2 workers and `PROMETHEUS_MULTIPROC_DIR`, after 20 requests four scrapes each
+  reported 20; no token → 401, unset token → 404. A test runs two real processes into one
+  directory and checks one render sums them (6).
+- `prometheus-client` 0.26.0 added (released 2026-07-24).
+
+### Compose demo
+- `compose.yaml` at the root: `db`, a one-shot `init` (keys via `scripts/demo_env.py` into the
+  `state` volume, then schema, seed, policies, history, demo hosts) and `api`; `fake-node` under
+  the `tools` profile. The image gained `backend/deploy/entrypoint.sh`, which exports
+  `SECRETS_FILE` when set and is a pass-through otherwise.
+- From the working tree on port 8002: `/` and a deep link 200; three buildings; `fake-node` with
+  `1 p` → LED red, `1 b` → still `occupied` (away, inside `GHOST_S`); Priya, "macro econ" →
+  Join → matched with Dakota (Economics) at `wel-1-t4` in about 8 s. 54 API log lines, all JSON.
+- `down`, then `up`: `init` kept the keys and added nothing (0 history rows, 0 demo hosts).
+
+### Browser e2e (`frontend/e2e/match.e2e.ts`, Playwright 1.64.0)
+- Alex hosts `t1-s1` with "orgo 1"; Priya searches and asks; her panel shows "Asking Alex ·
+  Biochemistry" and not "Table 01"; Alex accepts; her match shows "PCL Library · Floor 2 ·
+  Table 01". Passes in 8.2 s against `compose.yaml` + `compose.e2e.yaml`.
+- With the search screen changed to print "at Table 01" before accept, the test fails on
+  `not.toContainText`. CI's `image` job became `e2e`, which builds the image through compose.
+
+### Load (`make load-check`, 4 workers with JSON logs and multiprocess metrics)
+- 500 phones, 3 runs: p50 1.9–2.4 ms (building), 2.2–2.6 ms (buildings), 25.7–31.1 ms
+  (readings); p95 6.8–28.5, 17.1–70.1, 75.3–202.7 ms; no errors in 63,997 requests.
+- 1000 phones: 685 requests/s, map p50 under 3 ms. 2000 phones, three runs: p50 52–339 ms on the
+  building, p95 1.6–4.0 s, readings starved, up to 3 timeouts. The server-side histogram for one
+  of them: p95 ≤ 10 ms on both map routes. 680 phones polling every 1 s (same rate, 730
+  connections): p50 4 ms.
+- Ruled out: CPU (instantaneous: no worker above 24%, no generator process above 31%), swap
+  (swap-ins 41/s during a run vs 45/s idle), listen queue (0 overflows). 8 workers with
+  `DB_POOL_SIZE=2`: no better. 16 generator processes: worse (45 timeouts).
+
+### Bugs (cause → fix)
+1. **Port 8000 answered from the internet on both servers** (`curl http://<ip>:8000/api/health`
+   → 200, bypassing Caddy and TLS). Cause: the deploy compose published `8000:8000`, and Docker
+   publishes through its own iptables chain, which ufw doesn't filter. Fix `d52f426` binds
+   127.0.0.1; live after the next deploy.
+2. **`test_skip_locked_scheduler_ticks_do_not_collide` could not fail.** Found by removing
+   `SKIP LOCKED` and watching it pass. Cause: its setup posted a reading after expiring the
+   request, and ingest advances the search itself (`advance_session` → `advance_search`), so
+   the ticks found nothing. Fix `e6181bf` (renamed `…concurrent_scheduler_ticks…`) expires the
+   request in the database and asserts it is still pending before the ticks.
+
+Caught before committing:
+- JSON mode re-enabled uvicorn's access log: setting `propagate` on `uvicorn.access` undid
+  `--no-access-log`, and `dictConfig` resets the children of any logger it configures. The
+  JSON config now turns `uvicorn.access` off explicitly; a test pins it.
+- With `--workers`, uvicorn's supervisor process logged in plain text, since it never calls
+  `build()`. Hence `--log-config` in the image.
+- `docker compose run fake-node` re-ran `init` through `depends_on`, and the first stdin lines
+  were lost while it did. `fake-node` no longer depends on anything.
+- The first e2e run posted only `t1-s1`, so `t1-s2` read as no signal and the host was hidden
+  (no open seat at the table, FR-24). A real node reports all its seats; the test now does too.
+- A formatting error reached a local commit because `make lint | tail` hid make's exit status;
+  amended before any push.
+
+### Not verified
+- CI on `v4-engineering` (not pushed yet), including the new `e2e` job.
+- None of D60 is deployed. Before the next deploy, confirm each server's Caddyfile proxies to
+  `localhost:8000` (or `127.0.0.1:8000`), since the port is no longer published on the public
+  address.
+- Push to real devices; `npm audit` reports 4 low findings, all in `workbox-build`'s
+  `deepmerge`, already present before this session.
+
 ## Next steps
-1. **Review and merge** the `v3-repoaudit` PR into `main` once CI is green.
-2. **Redeploy** both servers from `main`:
-   `HOSTS="root@64.177.55.143 root@45.32.219.190" make deploy` (from `backend/`).
-3. **Branch cleanup** after the merge: `v1`, `v1frontend`, `v1backend`, `v1final`,
+1. **Review and merge** the `v3-repoaudit` PR, then the `v4-engineering` PR (rebased onto
+   `main`).
+2. **Before redeploying,** check each server's Caddyfile upstream (bug 1). Then
+   `HOSTS="root@64.177.55.143 root@45.32.219.190" make deploy` from `backend/`, and confirm
+   `http://<ip>:8000` no longer answers.
+3. **Branch cleanup** after the merges: `v1`, `v1frontend`, `v1backend`, `v1final`,
    `v2-frontendredo`, `Arduino/Transmitter-Code`; all are contained in `main`.
-4. **Q22:** a license, with the team.
-5. **Q14 / D58:** thermal + IR hardware for real ghost-seat detection.
+4. **Load:** run the generator from a second machine to find where 2000 connections stall.
+5. **Q22:** a license, with the team.
+6. **Q14 / D58:** thermal + IR hardware for real ghost-seat detection.

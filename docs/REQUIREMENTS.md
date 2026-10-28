@@ -329,6 +329,9 @@ JSON over HTTPS. Errors: `{"error": "<code>", "message": "<sentence>"}` with a 4
 | WORKER_ENABLED | No | Run the scheduler tick and push sender in this instance (default `true`) |
 | DB_POOL_SIZE | No | Connections per pool per process (default 5). Processes × instances × pools × this must stay under the database's `max_connections` |
 | DB_TIMEOUT_S | No | Bound on each database wait: a pooled connection, connecting, each round trip (default 5, D41) |
+| LOG_FORMAT | No | `text` (default) or `json`: one JSON object per line with the request id (D60). The image sets `json` |
+| METRICS_TOKEN | No | Bearer token for `GET /metrics` (at least 16 characters). Unset, `/metrics` is a 404 (D60) |
+| PROMETHEUS_MULTIPROC_DIR | No | Directory the uvicorn processes share metric samples through, so one scrape covers all of them. The image sets it |
 
 # 9. AI integration
 

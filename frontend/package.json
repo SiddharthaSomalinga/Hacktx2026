@@ -12,6 +12,7 @@
     "preview": "vite preview",
     "typecheck": "tsc -p tsconfig.app.json --noEmit && tsc -p tsconfig.sw.json --noEmit && tsc -p tsconfig.node.json --noEmit",
     "test": "vitest run",
+    "e2e": "playwright test",
     "api:types": "openapi-typescript http://localhost:8000/openapi.json -o src/api/schema.gen.ts",
     "map:tiles": "node scripts/map/extract-tiles.mjs",
     "map:glyphs": "node scripts/map/fetch-glyphs.mjs",
@@ -31,6 +32,7 @@
   },
   "devDependencies": {
     "@mapbox/vector-tile": "3.0.0",
+    "@playwright/test": "1.64.0",
     "@types/geojson": "7946.0.16",
     "@types/node": "22.20.5",
     "@types/react": "19.3.0",

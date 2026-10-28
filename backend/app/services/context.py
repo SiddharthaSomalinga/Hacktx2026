@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import timedelta
 
 from app.domain.types import Timers
-from app.services.ports import Clock, Notifier, Repository, TopicAI
+from app.services.ports import Clock, Metrics, Notifier, NullMetrics, Repository, TopicAI
 
 
 @dataclass(frozen=True)
@@ -22,3 +22,4 @@ class Context:
     vapid_public_key: str
     demo_hosts: bool = False  # D56
     demo_accept: timedelta = timedelta(seconds=5)
+    metrics: Metrics = field(default_factory=NullMetrics)  # D60

@@ -1,0 +1,76 @@
+# One-command local demo (D60): `docker compose up --build` (or `make demo`), then open
+# http://localhost:8000. Postgres with TimescaleDB, a one-shot setup job, and the deploy image
+# with demo hosts on. The keys are generated on first start into the `state` volume, so
+# nothing secret is in this file. `docker compose down -v` removes the volumes: the database
+# and the generated keys.
+#
+# Act as the seat sensor: docker compose run --rm fake-node
+
+x-app: &app
+  build:
+    context: .
+    dockerfile: backend/Dockerfile
+  image: synapse-demo:local
+  volumes:
+    - state:/state
+  environment: &app-env
+    # Local-only password, the same one `make db-up` and CI use; the port is not published.
+    DATABASE_URL: postgresql://postgres:ghostseats@db:5432/postgres
+    DEMO_HOSTS: "true"
+    SECRETS_FILE: /state/demo.env
+
+services:
+  db:
+    image: timescale/timescaledb-ha:pg16
+    environment:
+      POSTGRES_PASSWORD: ghostseats
+    volumes:
+      - db:/home/postgres/pgdata
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  init:
+    <<: *app
+    environment:
+      <<: *app-env
+      SECRETS_FILE: ""  # the file doesn't exist until this job writes it
+      NODE_KEY: ${NODE_KEY:-}  # optional: the e2e run fixes it (compose.e2e.yaml)
+    command:
+      - sh
+      - -ec
+      - |
+        python -m scripts.demo_env /state/demo.env
+        set -a; . /state/demo.env; set +a
+        python -m scripts.db apply sql/schema.sql
+        python -m scripts.db apply sql/seed.sql
+        python -m scripts.db policies
+        python -m scripts.seed_history
+        python -m scripts.seed_demo_hosts
+    depends_on:
+      db:
+        condition: service_healthy
+
+  api:
+    <<: *app
+    ports:
+      - "127.0.0.1:${PORT:-8000}:8000"
+    restart: unless-stopped
+    depends_on:
+      init:
+        condition: service_completed_successfully
+
+  fake-node:
+    <<: *app
+    profiles: [tools]
+    command: ["python", "-m", "scripts.fake_node", "--base-url", "http://api:8000"]
+    stdin_open: true
+    tty: true
+    # No depends_on: `run` would restart the finished init job first. The node retries until
+    # the API answers.
+
+volumes:
+  db:
+  state:

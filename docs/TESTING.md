@@ -116,3 +116,17 @@ link it prints on both devices.
 | `npm test` (`frontend/`) | FR-8 colors, floor layout on every seeded floor, polling and backoff, freshness, notification URLs, push body |
 | `npm run build` (`frontend/`) | Typecheck of the app and the service worker, then the production build |
 | `make check` / `make test-db` (`backend/`) | API, services and repository, including the D53 additions |
+| `npm run e2e` (`frontend/`) | In a browser, against the compose stack: a seeker asks, the host accepts, and the table appears for the seeker only after the accept (FR-43) |
+
+The browser test needs the stack running with demo hosts off and a known node key, so the test
+can play the sensor. From the repo root:
+
+```bash
+export NODE_KEY=$(openssl rand -hex 24)
+docker compose -f compose.yaml -f compose.e2e.yaml down -v   # the key only applies to fresh volumes
+docker compose -f compose.yaml -f compose.e2e.yaml up -d --build
+cd frontend && npx playwright install chromium && npm run e2e
+```
+
+Set `PORT` for compose and `E2E_BASE_URL` for the test to use a port other than 8000. CI runs the
+same steps in its `e2e` job.

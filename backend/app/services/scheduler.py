@@ -25,6 +25,7 @@ class SchedulerService:
         self._requests = requests
 
     def tick(self) -> int:
+        started = self._ctx.clock.monotonic()
         now = self._ctx.clock.now()
         t = self._ctx.timers
         with self._ctx.repo.read() as tx:
@@ -38,7 +39,9 @@ class SchedulerService:
         for search_id in searches:
             self._lifecycle.advance_search(search_id, Lock.SKIP)
         accepted = self._accept_for_demo_hosts(now) if self._ctx.demo_hosts else 0
-        return len(sessions) + len(matches) + len(searches) + accepted
+        due = len(sessions) + len(matches) + len(searches) + accepted
+        self._ctx.metrics.observe_tick(self._ctx.clock.monotonic() - started, due)
+        return due
 
     def _accept_for_demo_hosts(self, now: datetime) -> int:
         """D56: a simulated host accepts a request DEMO_ACCEPT_S after it arrives, through the
