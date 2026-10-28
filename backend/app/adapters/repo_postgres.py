@@ -9,19 +9,22 @@ from __future__ import annotations
 
 import json
 import logging
+import random
 import uuid
-from collections.abc import Iterator, Sequence
-from contextlib import contextmanager
+from collections.abc import AsyncGenerator, AsyncIterator, Iterator, Sequence
+from contextlib import aclosing, contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any
 
+import anyio
 import psycopg
-from psycopg import Connection
+from psycopg import AsyncConnection, Connection
 from psycopg.rows import TupleRow, dict_row
 from psycopg_pool import ConnectionPool
 
 from app.adapters.db import BoundedConnection, make_pool
+from app.adapters.hints import CHANNEL, PendingHints, decode, encode, merge
 from app.adapters.history_sql import HISTORY_SQL
 from app.domain.types import (
     Building,
@@ -37,14 +40,25 @@ from app.domain.types import (
     Search,
     SearchStatus,
     Seat,
+    SeatChange,
     SeatState,
     StoredReading,
     StudyRequest,
     Table,
     Topic,
     User,
+    UserChange,
 )
-from app.services.ports import Conflict, Lock, PushSubscription, Unavailable
+from app.services.ports import (
+    Conflict,
+    Hint,
+    Lock,
+    MapHint,
+    PushSubscription,
+    Resync,
+    Unavailable,
+    UserHint,
+)
 
 log = logging.getLogger("ghostseats.repo")
 
@@ -177,11 +191,70 @@ def _match(r: Row) -> Match:
     )
 
 
+# Who sees a seat's change (D61): its building's map; the live hosts at its table (their own
+# seat, and whether the table still has an open seat, FR-24); both sides of an active match
+# whose assigned seat is on its floor (the alternative seat, FR-39). Presence alone reaches
+# only the host at that seat.
+_WATCHERS_SQL = """
+WITH changed AS (
+  SELECT s.id, s.table_id, t.building_id, t.floor
+  FROM seats s JOIN tables t ON t.id = s.table_id
+  WHERE s.id = ANY(%(public)s::text[])
+)
+SELECT 'm' AS kind, c.building_id AS ref FROM changed c
+UNION
+SELECT 'u', h.user_id FROM host_sessions h
+  JOIN seats hs ON hs.id = h.seat_id
+  JOIN changed c ON c.table_id = hs.table_id
+  WHERE h.ended_at IS NULL
+UNION
+SELECT 'u', w.user_id FROM matches m
+  JOIN seats a ON a.id = m.assigned_seat_id
+  JOIN tables ta ON ta.id = a.table_id
+  JOIN changed c ON c.building_id = ta.building_id AND c.floor = ta.floor
+  JOIN host_sessions h ON h.id = m.host_session_id
+  CROSS JOIN LATERAL (VALUES (m.seeker_id), (h.user_id)) AS w (user_id)
+  WHERE m.status = 'active'
+UNION
+SELECT 'u', h.user_id FROM host_sessions h
+  WHERE h.ended_at IS NULL AND h.seat_id = ANY(%(presence)s::text[])
+"""
+
+
 class PostgresTx:
     """One transaction on one pooled connection."""
 
     def __init__(self, conn: Connection[TupleRow]) -> None:
         self._conn = conn
+        self.recorded = PendingHints()
+
+    def flush_hints(self) -> None:
+        """Resolve what this transaction's writes recorded and NOTIFY it (D61). Run after the
+        last write and before COMMIT: Postgres delivers the notifications only if the
+        transaction commits, and folds identical ones."""
+        r = self.recorded
+        if not r:
+            return
+        hints: list[MapHint | UserHint] = [
+            UserHint(user_id, frozenset(changes)) for user_id, changes in r.users.items()
+        ]
+        if r.host_sessions:
+            for row in self._all(
+                "SELECT id, user_id FROM host_sessions WHERE id = ANY(%s::uuid[])",
+                (list(r.host_sessions),),
+            ):
+                hints.append(UserHint(row["user_id"], frozenset(r.host_sessions[str(row["id"])])))
+        public = [s for s, c in r.seats.items() if c is SeatChange.PUBLIC]
+        presence = [s for s, c in r.seats.items() if c is SeatChange.PRESENCE]
+        if public or presence:
+            seat_watch = frozenset({UserChange.SEAT})
+            for row in self._all(_WATCHERS_SQL, {"public": public, "presence": presence}):
+                hints.append(
+                    MapHint(row["ref"]) if row["kind"] == "m" else UserHint(row["ref"], seat_watch)
+                )
+        payloads = [encode(h) for h in merge(hints)]
+        if payloads:
+            self._run("SELECT pg_notify(%s, p) FROM unnest(%s::text[]) AS p", (CHANNEL, payloads))
 
     def _all(self, query: str, params: Sequence[Any] | dict[str, Any] = ()) -> list[Row]:
         with self._conn.cursor(row_factory=dict_row) as cur:
@@ -258,7 +331,8 @@ class PostgresTx:
         )
         return _seat_state(r) if r else None
 
-    def save_seat_state(self, state: SeatState) -> None:
+    def save_seat_state(self, state: SeatState, *, change: SeatChange) -> None:
+        self.recorded.seat(state.seat_id, change)
         self._run(
             f"""INSERT INTO seat_state ({self._STATE_COLS})
                 VALUES (%(seat_id)s, %(state)s, %(candidate_state)s, %(candidate_since)s,
@@ -362,6 +436,7 @@ class PostgresTx:
             self._session_params(session),
             "one live session per user and per seat",
         )
+        self.recorded.user(session.user_id, UserChange.SESSION)
 
     def update_session(self, session: HostSession) -> None:
         self._run(
@@ -373,6 +448,7 @@ class PostgresTx:
                WHERE id = %(id)s""",
             self._session_params(session),
         )
+        self.recorded.user(session.user_id, UserChange.SESSION)
 
     def session(self, session_id: str, lock: Lock = Lock.NONE) -> HostSession | None:
         sid = _uuid(session_id)
@@ -429,6 +505,7 @@ class PostgresTx:
             self._search_params(search),
             "one active search per seeker",
         )
+        self.recorded.user(search.seeker_id, UserChange.SEARCH)
 
     def update_search(self, search: Search) -> None:
         self._run(
@@ -436,6 +513,7 @@ class PostgresTx:
                  joined_at = %(joined_at)s WHERE id = %(id)s""",
             self._search_params(search),
         )
+        self.recorded.user(search.seeker_id, UserChange.SEARCH)
 
     def search(self, search_id: str, lock: Lock = Lock.NONE) -> Search | None:
         sid = _uuid(search_id)
@@ -464,11 +542,17 @@ class PostgresTx:
             ),
             "one pending request per search",
         )  # fmt: skip
+        self._record_pair(request.seeker_id, request.host_session_id, UserChange.REQUEST)
 
     def update_request(self, request: StudyRequest) -> None:
         self._run(
             "UPDATE requests SET status = %s WHERE id = %s", (request.status.value, request.id)
         )
+        self._record_pair(request.seeker_id, request.host_session_id, UserChange.REQUEST)
+
+    def _record_pair(self, seeker_id: str, host_session_id: str, change: UserChange) -> None:
+        self.recorded.user(seeker_id, change)
+        self.recorded.host(host_session_id, change)
 
     def request(self, request_id: str, lock: Lock = Lock.NONE) -> StudyRequest | None:
         rid = _uuid(request_id)
@@ -520,12 +604,14 @@ class PostgresTx:
             ),
             "one active match per host session and per seeker",
         )  # fmt: skip
+        self._record_pair(match.seeker_id, match.host_session_id, UserChange.MATCH)
 
     def update_match(self, match: Match) -> None:
         self._run(
             "UPDATE matches SET status = %s, arrived_at = %s WHERE id = %s",
             (match.status.value, match.arrived_at, match.id),
         )
+        self._record_pair(match.seeker_id, match.host_session_id, UserChange.MATCH)
 
     def match(self, match_id: str, lock: Lock = Lock.NONE) -> Match | None:
         mid = _uuid(match_id)
@@ -567,6 +653,8 @@ class PostgresTx:
             "INSERT INTO blocks (user_id, blocked_user_id) VALUES (%s, %s) ON CONFLICT DO NOTHING",
             (user_id, blocked_user_id),
         )
+        self.recorded.user(user_id, UserChange.BLOCK)
+        self.recorded.user(blocked_user_id, UserChange.BLOCK)
 
     def blocked_with(self, user_id: str) -> set[str]:
         rows = self._all(
@@ -705,6 +793,12 @@ class PostgresTx:
         )
         return [str(r["id"]) for r in rows]
 
+    # --- live hints ----------------------------------------------------------
+
+    def touch_users(self, user_ids: Sequence[str], change: UserChange) -> None:
+        for user_id in user_ids:
+            self.recorded.user(user_id, change)
+
 
 @contextmanager
 def _unavailable_on_connection_failure() -> Iterator[None]:
@@ -719,8 +813,17 @@ def _unavailable_on_connection_failure() -> Iterator[None]:
 
 class PostgresRepository:
     def __init__(
-        self, url: str, read_url: str | None = None, *, pool_size: int, timeout_s: float = 5.0
+        self,
+        url: str,
+        read_url: str | None = None,
+        *,
+        pool_size: int,
+        timeout_s: float = 5.0,
+        feed_probe_s: float = 30.0,
     ) -> None:
+        self._url = url
+        self._timeout_s = timeout_s
+        self._feed_probe_s = feed_probe_s
         self._primary = make_pool(url, max_size=pool_size, timeout_s=timeout_s, name="primary")
         self._replica: ConnectionPool[BoundedConnection] | None = (
             make_pool(read_url, max_size=pool_size, timeout_s=timeout_s, name="replica")
@@ -740,7 +843,9 @@ class PostgresRepository:
             self._primary.connection() as conn,
             conn.transaction(),
         ):
-            yield PostgresTx(conn)
+            tx = PostgresTx(conn)
+            yield tx
+            tx.flush_hints()
 
     @contextmanager
     def read(self) -> Iterator[PostgresTx]:
@@ -749,6 +854,62 @@ class PostgresRepository:
         with _unavailable_on_connection_failure(), pool.connection() as conn, conn.transaction():
             conn.execute(b"SET TRANSACTION READ ONLY")
             yield PostgresTx(conn)
+
+    async def hints(self) -> AsyncIterator[Hint]:
+        """LISTEN on one unpooled primary connection (D61). LISTEN is impossible on a hot
+        standby, so never the replica. A pooled `BoundedConnection` won't do either: its
+        round-trip bound would close the connection whenever no hint arrives in time."""
+        delay = 1.0
+        while True:
+            conn: AsyncConnection[TupleRow] | None = None
+            try:
+                conn = await AsyncConnection.connect(
+                    self._url,
+                    autocommit=True,
+                    connect_timeout=max(2, int(self._timeout_s)),
+                    keepalives=1,
+                    keepalives_idle=30,
+                    keepalives_interval=10,
+                    keepalives_count=3,
+                )
+                await conn.execute(f"LISTEN {CHANNEL}".encode())
+                delay = 1.0
+                yield Resync()
+                async with aclosing(self._listen(conn)) as hints:
+                    async for hint in hints:
+                        yield hint
+            except (psycopg.OperationalError, TimeoutError) as exc:
+                log.warning("live hint feed lost: %s; reconnecting", type(exc).__name__)
+            finally:
+                if conn is not None:
+                    with anyio.CancelScope(shield=True):
+                        await conn.close()
+            await anyio.sleep(delay * random.uniform(0.5, 1.5))  # jitter: not all at once
+            delay = min(delay * 2, 30.0)
+
+    async def _listen(self, conn: AsyncConnection[TupleRow]) -> AsyncGenerator[Hint]:
+        """Hints until the connection fails. Every LIVE_FEED_PROBE_S the connection proves it
+        still delivers by notifying itself; a silent drop (a pooler that discards LISTEN, a
+        half-open TCP link) raises TimeoutError instead of starving the hub."""
+        # `notifies()` holds the connection's lock while suspended, so each one is closed
+        # explicitly before the connection is used again.
+        while True:
+            async with aclosing(conn.notifies(timeout=self._feed_probe_s)) as window:
+                async for n in window:
+                    if (hint := decode(n.payload)) is not None:
+                        yield hint
+            probe = f"p:{uuid.uuid4().hex}"
+            await conn.execute(b"SELECT pg_notify(%s, %s)", (CHANNEL, probe))
+            echoed = False
+            async with aclosing(conn.notifies(timeout=self._timeout_s)) as window:
+                async for n in window:
+                    if n.payload == probe:
+                        echoed = True
+                        break
+                    if (hint := decode(n.payload)) is not None:
+                        yield hint
+            if not echoed:
+                raise TimeoutError("the hint feed did not echo its probe")
 
     def ping(self) -> bool:
         try:

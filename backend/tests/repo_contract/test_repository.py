@@ -20,6 +20,7 @@ from app.domain.types import (
     RequestStatus,
     Search,
     SearchStatus,
+    SeatChange,
     SeatState,
     StoredReading,
     StudyRequest,
@@ -95,7 +96,7 @@ def test_seat_state_round_trip(repo: Repository) -> None:
         last_human=at(0), last_seen=at(3), blink_until=at(60),
     )  # fmt: skip
     with repo.tx() as tx:
-        tx.save_seat_state(state)
+        tx.save_seat_state(state, change=SeatChange.NONE)
     with repo.read() as tx:
         assert tx.seat_states(["s1", "s2"])["s1"] == state
     with repo.tx() as tx:
@@ -117,7 +118,9 @@ def test_readings_round_trip_in_time_order(repo: Repository) -> None:
 
 def test_rollback_on_exception(repo: Repository) -> None:
     with pytest.raises(RuntimeError), repo.tx() as tx:
-        tx.save_seat_state(replace(SeatState.never_seen("s1"), last_seen=at(9)))
+        tx.save_seat_state(
+            replace(SeatState.never_seen("s1"), last_seen=at(9)), change=SeatChange.NONE
+        )
         raise RuntimeError("boom")
     with repo.read() as tx:
         assert tx.seat_states(["s1"])["s1"].last_seen is None
@@ -277,8 +280,8 @@ def test_due_queries(repo: Repository) -> None:
     r_ok = new_request(s_ok, host_here, expires_at=at(500))
     r_gone = new_request(s_gone, host_gone, expires_at=at(500))
     with repo.tx() as tx:
-        tx.save_seat_state(present)
-        tx.save_seat_state(gone)
+        tx.save_seat_state(present, change=SeatChange.NONE)
+        tx.save_seat_state(gone, change=SeatChange.NONE)
         for s in (host_here, host_gone, sim_host):
             tx.insert_session(s)
         for q in (s_ok, s_gone):
@@ -292,7 +295,6 @@ def test_due_queries(repo: Repository) -> None:
         assert tx.due_match_ids(at(105), at(-10)) == []
         assert len(tx.due_match_ids(at(1000), at(-10))) == 1
         assert tx.due_session_ids(at(105), at(50)) == [host_gone.id]  # simulated never due
-
 
 
 def test_idle_searches_are_joined_active_and_have_nothing_pending(repo: Repository) -> None:
@@ -310,6 +312,7 @@ def test_idle_searches_are_joined_active_and_have_nothing_pending(repo: Reposito
     with repo.read() as tx:
         assert tx.idle_search_ids() == [idle.id]
 
+
 # --- history (FR-49, D31) -------------------------------------------------------------
 
 
@@ -324,8 +327,12 @@ def test_history_matches_the_reference_semantics(repo: Repository) -> None:
     ]
     with repo.tx() as tx:
         tx.insert_readings(rows)
-        tx.save_seat_state(replace(SeatState.never_seen("s1"), last_seen=at(3600)))
-        tx.save_seat_state(replace(SeatState.never_seen("s2"), last_seen=at(2670)))
+        tx.save_seat_state(
+            replace(SeatState.never_seen("s1"), last_seen=at(3600)), change=SeatChange.NONE
+        )
+        tx.save_seat_state(
+            replace(SeatState.never_seen("s2"), last_seen=at(2670)), change=SeatChange.NONE
+        )
     points = repo.history("lib", at(0), at(3600), OFFLINE)
     assert len(points) == 1
     hour, avg = points[0]
@@ -339,7 +346,9 @@ def test_history_carries_state_in_from_before_the_window_and_caps_silent_seats(
 ) -> None:
     with repo.tx() as tx:
         tx.insert_readings([StoredReading("s1", at(-7200), True, False, False)])
-        tx.save_seat_state(replace(SeatState.never_seen("s1"), last_seen=at(1770)))
+        tx.save_seat_state(
+            replace(SeatState.never_seen("s1"), last_seen=at(1770)), change=SeatChange.NONE
+        )
     points = repo.history("lib", at(0), at(7200), OFFLINE)
     assert [round(p[1], 4) for p in points] == [0.5, 0.0]  # open until last_seen + 30 s = 1800
 
@@ -347,6 +356,8 @@ def test_history_carries_state_in_from_before_the_window_and_caps_silent_seats(
 def test_history_partial_current_hour(repo: Repository) -> None:
     with repo.tx() as tx:
         tx.insert_readings([StoredReading("s1", at(0), True, False, False)])
-        tx.save_seat_state(replace(SeatState.never_seen("s1"), last_seen=at(900)))
+        tx.save_seat_state(
+            replace(SeatState.never_seen("s1"), last_seen=at(900)), change=SeatChange.NONE
+        )
     points = repo.history("lib", at(0), at(900), OFFLINE)
     assert points == [(at(0), pytest.approx(1.0))]  # 900 open seconds of 900 elapsed

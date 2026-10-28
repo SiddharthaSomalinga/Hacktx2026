@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import AsyncIterator, Mapping, Sequence
 from contextlib import AbstractContextManager
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import StrEnum
-from typing import Protocol
+from typing import Final, Protocol
 
 from app.domain.types import (
     Building,
@@ -15,12 +16,14 @@ from app.domain.types import (
     OutboxMessage,
     Search,
     Seat,
+    SeatChange,
     SeatState,
     StoredReading,
     StudyRequest,
     Table,
     Topic,
     User,
+    UserChange,
 )
 
 
@@ -125,6 +128,29 @@ class NullMetrics:
         return b"", "text/plain; charset=utf-8"
 
 
+@dataclass(frozen=True)
+class MapHint:
+    """A building's public seat states changed (D61)."""
+
+    building_id: str
+
+
+@dataclass(frozen=True)
+class UserHint:
+    """Something a user's own GETs return may have changed (D61)."""
+
+    user_id: str
+    changes: frozenset[UserChange]
+
+
+@dataclass(frozen=True)
+class Resync:
+    """The hint feed (re)connected: hints may have been missed, so treat everything as dirty."""
+
+
+Hint = MapHint | UserHint | Resync
+
+
 class OutboxRow(Protocol):
     @property
     def id(self) -> int: ...
@@ -148,7 +174,10 @@ class Tx(Protocol):
     # Sensing
     def seat_states(self, seat_ids: Sequence[str]) -> dict[str, SeatState]: ...
     def lock_seat_state(self, seat_id: str) -> SeatState | None: ...
-    def save_seat_state(self, state: SeatState) -> None: ...
+    def save_seat_state(self, state: SeatState, *, change: SeatChange) -> None:
+        """`change` (from `seat_change`) is required, so no writer can forget the live hint."""
+        ...
+
     def touch_node(self, node_id: str, now: datetime) -> None: ...
     def insert_readings(self, rows: Sequence[StoredReading]) -> None: ...
     def readings(self, seat_ids: Sequence[str], until: datetime) -> list[StoredReading]: ...
@@ -217,6 +246,52 @@ class Tx(Protocol):
     def due_session_ids(self, now: datetime, host_absent_before: datetime) -> list[str]: ...
     def demo_request_ids(self, created_before: datetime) -> list[str]: ...
 
+    # Live hints (D61): sent on commit, dropped on rollback
+    def touch_users(self, user_ids: Sequence[str], change: UserChange) -> None:
+        """Hint users whose views changed with no row written for them (the sweep)."""
+        ...
+
+
+# Every Tx method that writes, with the user changes its hints carry (D61). A seat-state write
+# is classified by its `change` argument instead. A new writer must be listed here, or the
+# repository contract fails; one with no effect on any user's view gets an empty set.
+WRITE_EFFECTS: Final[Mapping[str, frozenset[UserChange]]] = {
+    "save_seat_state": frozenset({UserChange.SEAT}),
+    "touch_node": frozenset(),
+    "insert_readings": frozenset(),
+    "cache_topic": frozenset(),
+    "insert_session": frozenset({UserChange.SESSION}),
+    "update_session": frozenset({UserChange.SESSION}),
+    "insert_search": frozenset({UserChange.SEARCH}),
+    "update_search": frozenset({UserChange.SEARCH}),
+    "insert_request": frozenset({UserChange.REQUEST}),
+    "update_request": frozenset({UserChange.REQUEST}),
+    "insert_match": frozenset({UserChange.MATCH}),
+    "update_match": frozenset({UserChange.MATCH}),
+    "insert_block": frozenset({UserChange.BLOCK}),
+    "insert_report": frozenset(),
+    "upsert_subscription": frozenset(),
+    "delete_subscription": frozenset(),
+    "enqueue": frozenset(),
+    "claim_outbox": frozenset(),
+    "mark_outbox": frozenset(),
+    "touch_users": frozenset(UserChange),
+}
+
+# The rest of Tx only reads. Listed so that the contract test can tell a new method apart.
+READS: Final[frozenset[str]] = frozenset(
+    {
+        "buildings", "tables", "seats", "seat", "seat_states", "lock_seat_state", "readings",
+        "user", "demo_users", "cached_topic", "session", "live_session_for_user",
+        "live_sessions", "live_sessions_for_seats", "search", "active_search_for_user",
+        "request", "pending_request_for_search", "pending_requests_for_session",
+        "count_requests_since", "match", "active_match_for_session", "active_match_for_seeker",
+        "match_for_search", "blocked_with", "subscriptions_for", "outbox_unsent",
+        "due_search_ids", "idle_search_ids", "due_match_ids", "due_session_ids",
+        "demo_request_ids",
+    }
+)  # fmt: skip
+
 
 class Repository(Protocol):
     def tx(self) -> AbstractContextManager[Tx]:
@@ -228,6 +303,12 @@ class Repository(Protocol):
         ...
 
     def ping(self) -> bool: ...
+
+    def hints(self) -> AsyncIterator[Hint]:
+        """Hints from every committed write, on every instance (D61). Starts with `Resync`, and
+        yields `Resync` again after any reconnect, because hints may be lost while disconnected.
+        Never ends on its own; cancel the consumer to stop it."""
+        ...
 
     def history(
         self, building_id: str, since: datetime, until: datetime, offline: timedelta

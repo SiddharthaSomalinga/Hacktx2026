@@ -15,6 +15,7 @@ from app.domain.types import (
     RequestStatus,
     SearchStatus,
     Seat,
+    SeatChange,
     StudyRequest,
 )
 from app.services.context import Context
@@ -102,7 +103,8 @@ class RequestService:
             tx.update_search(replace(search, status=SearchStatus.MATCHED))
             state = tx.lock_seat_state(seat.id)
             if state is not None:
-                tx.save_seat_state(replace(state, blink_until=now + self._ctx.timers.blink))
+                blink = replace(state, blink_until=now + self._ctx.timers.blink)
+                tx.save_seat_state(blink, change=SeatChange.NONE)  # LED only, never public
             host_user = tx.user(session.user_id)
             assert host_user is not None
             tx.enqueue(

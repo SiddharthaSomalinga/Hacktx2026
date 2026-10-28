@@ -12,7 +12,7 @@ import pytest
 
 from app.adapters.ai_fallback import FallbackAI
 from app.adapters.repo_postgres import PostgresRepository
-from app.domain.types import OutboxKind, OutboxMessage, Reading
+from app.domain.types import OutboxKind, OutboxMessage, Reading, SeatChange
 from app.main import create_app
 from app.services.container import Services
 from app.services.context import Context
@@ -292,7 +292,9 @@ def test_seat_lock_keeps_a_reading_and_a_concurrent_blink(
         assert state is not None
         locked.set()
         assert not ingested.wait(0.5)  # ingest is waiting on the seat lock
-        tx.save_seat_state(replace(state, blink_until=clock.now() + timedelta(seconds=60)))
+        tx.save_seat_state(
+            replace(state, blink_until=clock.now() + timedelta(seconds=60)), change=SeatChange.NONE
+        )
     thread.join(10)
     assert ingested.is_set()
     with repo.read() as tx:

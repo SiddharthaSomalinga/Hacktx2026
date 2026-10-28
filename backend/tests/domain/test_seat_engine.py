@@ -16,8 +16,9 @@ from app.domain.seat_engine import (
     led_for,
     public_state,
     rows_to_store,
+    seat_change,
 )
-from app.domain.types import InternalState, Led, PublicState, Reading, SeatState
+from app.domain.types import InternalState, Led, PublicState, Reading, SeatChange, SeatState
 from tests.conftest import make_settings
 from tests.fakes import T0
 
@@ -148,3 +149,37 @@ def test_gap_longer_than_offline_s_writes_a_marker_then_the_reading() -> None:
 def test_gap_of_exactly_offline_s_is_not_a_gap() -> None:
     s = feed([(0, BAG)])
     assert rows_to_store(s, BAG, at(30), T) == []
+
+
+def _fold(readings: list[tuple[float, Reading]]) -> SeatState:
+    s = SeatState.never_seen("s1")
+    for t, r in readings:
+        s = apply_reading(s, r, T0 + timedelta(seconds=t), T)
+    return s
+
+
+@pytest.mark.parametrize(
+    ("history", "reading", "at", "expected"),
+    [
+        # First reading ever: offline -> open is public.
+        ([], EMPTY, 0, SeatChange.PUBLIC),
+        # A heartbeat that changes nothing.
+        ([(0, EMPTY)], EMPTY, 2, SeatChange.NONE),
+        # A person appears but the debounce hasn't passed: only presence changed.
+        ([(0, EMPTY)], PERSON, 2, SeatChange.PRESENCE),
+        # The same person, once the debounce commits occupied: public.
+        ([(0, EMPTY), (2, PERSON)], PERSON, 7, SeatChange.PUBLIC),
+        # Still present and occupied: nothing new.
+        ([(0, EMPTY), (2, PERSON), (7, PERSON)], PERSON, 9, SeatChange.NONE),
+        # The person leaves the bag: away commits but stays public occupied (GHOST_S).
+        ([(0, PERSON), (5, PERSON), (6, BAG)], BAG, 11, SeatChange.NONE),
+        # Back after an offline gap: offline -> occupied is public.
+        ([(0, PERSON), (5, PERSON)], PERSON, 40, SeatChange.PUBLIC),
+    ],
+)
+def test_seat_change_says_what_others_can_see(
+    history: list[tuple[float, Reading]], reading: Reading, at: float, expected: SeatChange
+) -> None:
+    before = _fold(history)
+    now = T0 + timedelta(seconds=at)
+    assert seat_change(before, apply_reading(before, reading, now, T), now, T) is expected

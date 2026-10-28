@@ -6,7 +6,7 @@ from dataclasses import replace
 
 from app.domain import notifications as notify
 from app.domain.geometry import nearest_seat
-from app.domain.types import HostSession, Match, MatchStatus, PublicState, Seat
+from app.domain.types import HostSession, Match, MatchStatus, PublicState, Seat, SeatChange
 from app.services.context import Context
 from app.services.errors import conflict, forbidden, not_found
 from app.services.facts import Facts
@@ -87,7 +87,8 @@ class MatchService:
             tx.update_match(replace(match, status=MatchStatus.COMPLETED, arrived_at=now))
             state = tx.lock_seat_state(host.seat_id)
             if state is not None:
-                tx.save_seat_state(replace(state, blink_until=now + self._ctx.timers.blink))
+                blink = replace(state, blink_until=now + self._ctx.timers.blink)
+                tx.save_seat_state(blink, change=SeatChange.NONE)  # LED only, never public
         return MatchStatus.COMPLETED
 
     def cancel(self, user_id: str, match_id: str) -> MatchStatus:

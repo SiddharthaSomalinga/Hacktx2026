@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Sequence
 
-from app.domain.seat_engine import apply_reading, led_for, rows_to_store
+from app.domain.seat_engine import apply_reading, led_for, rows_to_store, seat_change
 from app.domain.types import Led, Reading, SeatState
 from app.services.context import Context
 from app.services.lifecycle import LifecycleService
@@ -38,7 +38,7 @@ class ReadingsService:
                 if rows:
                     tx.insert_readings(rows)
                 after = apply_reading(before, reading, now, t)
-                tx.save_seat_state(after)
+                tx.save_seat_state(after, change=seat_change(before, after, now, t))
                 leds[seat_id] = led_for(after, now, t)
             linked = tx.live_sessions_for_seats(list(leds))
         # Presence rules for hosts sitting on these seats (FR-25, 26, 41), after commit.
