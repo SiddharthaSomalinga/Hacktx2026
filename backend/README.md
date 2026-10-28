@@ -242,9 +242,9 @@ make deploy HOSTS="root@<ip-1> root@<ip-2>" REF=origin/main
 - **Timer lag.** A timer fires up to `SCHEDULER_TICK_S` (2 s) late when nobody polls, and the
   map can be up to `MAP_CACHE_S` (1 s) stale per instance.
 - **Connection budget.** Processes × instances × `DB_POOL_SIZE` (5) has to fit inside the
-  database's connection limit. The local image allows 25; Tiger Data's limit is not checked
-  yet.
+  database's connection limit. The local image allows 25. Tiger Data allows 105 (12 reserved),
+  and the deploy uses 2 servers × 2 workers × 5 = 20.
 - **Placeholder seat ids.** The demo table uses node `table-1` and seats `t1-s1`, `t1-s2` until
   the hardware ids replace them in `sql/seed.sql`.
-- **Not deployed yet**, so web push has only been exercised against a test double, and the
-  rollout was tested on this laptop with a stand-in for `ssh`, not on Vultr.
+- **Web push is unverified on real devices.** The API runs on two Vultr servers (D57), but push
+  has only been exercised against a test double and VAPID signing, never on a locked phone.

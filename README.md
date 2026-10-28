@@ -6,7 +6,7 @@ A library seat map fed by desk sensors, with study-partner matching on top. Ever
 
 Built by 4 people at HackTX 2026, Sat 6 pm → Sun 11:30 am. The tag [`hacktx-2026`](https://github.com/SiddharthaSomalinga/Hacktx2026/tree/hacktx-2026) is what we demoed at 11:30 Sunday; `main` has changed since (docs, layout, CI).
 
-**Live:** <https://64.177.55.143.sslip.io>. Pick a demo user, search a course such as "macro econ" and tap Join; a simulated host (D56) accepts in about 5 s and the match shows where to go.
+**Live:** <https://64.177.55.143.sslip.io>. Pick a demo user, search a course such as "macro econ" and tap Join; a simulated host accepts in about 5 s and the match shows where to go.
 
 <p align="center"><img src="docs/images/demo.gif" width="300" alt="Seat states changing on the floor plan, then a study-partner match"/></p>
 <p align="center"><sub>Recorded on a local stack. <code>make fake-node</code> stands in for the sensor, the ghost timer is shortened to 15 s, and the first half runs at 4× speed. A person sits (blue), a bag is left alone (blue, then yellow "likely opening"), the person leaves (green); then a seeker asks to join and a simulated host accepts.</sub></p>
@@ -22,7 +22,7 @@ Built by 4 people at HackTX 2026, Sat 6 pm → Sun 11:30 am. The tag [`hacktx-20
 |---|---|
 | Seat sensing | **Real, one sensor.** The prototype has a single IR sensor per seat; those were the parts available at the hackathon. A single IR beam can't distinguish a person from a bag, so the bridge sends its value as both `object_present` and `human_present` |
 | Ghost-seat detection (`likely_opening`) | **Modeled in the backend, not reachable from the prototype.** It needs "object yes, human no", which one IR sensor never reports. `make fake-node` can send it (`1 b`). Planned upgrade: a thermal sensor for the person plus IR for belongings, feeding the two fields the backend already reads |
-| Demo hosts | **Simulated** (D56). With `DEMO_HOSTS=true`, `make seed-demo` creates one host per catalog course, and they accept requests after `DEMO_ACCEPT_S` (5 s) |
+| Demo hosts | **Simulated.** With `DEMO_HOSTS=true`, `make seed-demo` creates one host per catalog course, and they accept requests after `DEMO_ACCEPT_S` (5 s) |
 | Desk installation diagram | **Concept**, below |
 | Pulsing blue beacon at the host's seat | **Planned.** The backend returns `blue_blink` for a matched seat; the prototype firmware doesn't read the backend's LED colors yet |
 | Map, matching, Muse calls, push | Real |
@@ -46,7 +46,7 @@ Arduino (IR + LEDs) --serial text--> bridge (Python) --HTTP JSON--> FastAPI --> 
 
 ## Seat states
 
-The API exposes only the four public states (FR-6). Internally a seat is `open`, `occupied` (a person is there) or `away` (belongings only), and `away` stays public `occupied` until `GHOST_S` has passed:
+The API exposes only the four public states. Internally a seat is `open`, `occupied` (a person is there) or `away` (belongings only), and `away` stays public `occupied` until `GHOST_S` has passed:
 
 ```python
 def public_state(s: SeatState, now: datetime, t: Timers) -> PublicState:
@@ -154,9 +154,9 @@ npm run dev                   # http://localhost:5173, proxies /api to :8000
 
 In a third, act as the hardware: `cd backend && make fake-node`, then type `1 p` for a person, `1 b` for a bag alone, `1 e` for empty, `q` to quit. Seat `t1-s1` changes on the map within a few seconds. Without `MUSE_API_KEY`, matching uses the fallback.
 
-The Vite proxy expects the API on port 8000; if something else holds that port, stop it first.
+The Vite proxy sends `/api` to `http://localhost:8000`. If the API runs elsewhere, start the dev server with `API_PROXY_TARGET`, e.g. `API_PROXY_TARGET=http://localhost:8001 npm run dev`.
 
-Real hardware: flash `firmware/HACKATHON`, plug in the Arduino, then from the repo root run `pip install -r bridge/requirements.txt` and `GHOSTSEATS_URL=http://localhost:8000 NODE_KEY=<key from .env> python bridge/arduino_bridge.py`.
+Real hardware: flash `firmware/HACKATHON`, plug in the Arduino, then from the repo root run `pip install -r bridge/requirements.txt` and `SYNAPSE_URL=http://localhost:8000 NODE_KEY=<key from .env> python bridge/arduino_bridge.py`.
 
 ## Tests
 
@@ -186,13 +186,13 @@ That is the full offered load, about 355 requests/s, with no errors in 64,000 re
 
 ## Limitations and next steps
 
-- Presence comes from one IR sensor, so the prototype can't produce `likely_opening` (below). **Next:** the thermal + IR pair from the table above (D58).
-- The prototype firmware ignores the LED colors the backend returns, and the backend's LED colors (red for occupied) don't match the firmware and map (blue). The map is the reference (D54). **Next:** settle the colors (Q21), then have the firmware show what the backend returns, which also brings the matched-seat beacon.
-- Sign-in is a demo-user picker, and demo hosts are simulated. **Next:** university SSO behind the same auth service (NFR-7).
+- Presence comes from one IR sensor, so the prototype can't produce `likely_opening` (below). **Next:** the thermal + IR pair from the table above.
+- The prototype firmware ignores the LED colors the backend returns, and the backend's LED colors (red for occupied) don't match the firmware and map (blue). The map is the reference. **Next:** agree the LED colors with the hardware side, then have the firmware show what the backend returns, which also brings the matched-seat beacon.
+- Sign-in is a demo-user picker, and demo hosts are simulated. **Next:** university SSO behind the same auth service.
 - Push is at-least-once, so a notification can arrive twice; the service worker tags it by URL, so the second replaces the first on screen.
 - The frontend polls every 3 s; there is no WebSocket. On one laptop the stack carried 1000 polling phones but not 2000 open connections (Load).
 - Instances read time from their own clocks, so clock skew between servers shifts deadlines by the skew ([CONCURRENCY](docs/CONCURRENCY.md)).
-- The two servers have no load balancer (D57). Server 2 is a hot backup at its own address, so failing over means changing the URL.
+- The two servers have no load balancer. Server 2 is a hot backup at its own address, so failing over means changing the URL.
 
 ## At the hackathon
 
@@ -212,7 +212,7 @@ Two things went wrong that shaped what's here.
 | [TESTING](docs/TESTING.md) | Features with manual test steps |
 | [backend README](backend/README.md) | Running, testing and deploying the API |
 
-[PLAN](docs/PLAN.md) (decisions D1–D60, open questions) and [PROGRESS](docs/PROGRESS.md) (what was run, per session) are the build log.
+[PLAN](docs/PLAN.md) (every design decision, numbered, and the open questions) and [PROGRESS](docs/PROGRESS.md) (what was run, per session) are the build log.
 
 ## Team
 

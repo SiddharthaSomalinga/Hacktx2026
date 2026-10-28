@@ -45,5 +45,6 @@ export default defineConfig({
       devOptions: { enabled: false },
     }),
   ],
-  server: { proxy: { '/api': 'http://localhost:8000' } },
+  // `npm run dev` only. API_PROXY_TARGET points it at an API that isn't on :8000.
+  server: { proxy: { '/api': process.env.API_PROXY_TARGET ?? 'http://localhost:8000' } },
 })

@@ -689,3 +689,13 @@ second tier.
   The README gains load results and a postmortem.
 - The deploy publishes the API port on localhost only.
 - Out of scope: a real presence sensor; the hardware is no longer available (D58).
+
+**D62 — Fixes from the third outside review, on `v5-status`.** The author's call; HW-7 amended
+for the team.
+- The README carries no internal ids (decision, requirement or question numbers); PLAN stays
+  linked as the decision log.
+- The demo recording is an mp4 hosted as a GitHub attachment (896 KB, from the 6.2 MB GIF,
+  which is removed). GitHub does not play an mp4 committed to the repository inline.
+- The bridge reads `SYNAPSE_URL`, falling back to `GHOSTSEATS_URL`; HW-7 names `SYNAPSE_URL`.
+- The Vite dev proxy target is `API_PROXY_TARGET`, default `http://localhost:8000`.
+- No hardware change: the real presence sensor stays the next step (D58, D60).

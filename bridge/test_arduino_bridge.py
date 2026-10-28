@@ -38,9 +38,26 @@ def test_sends_on_change_and_on_heartbeat_only() -> None:
 def test_config_requires_a_key_and_builds_the_url() -> None:
     with pytest.raises(SystemExit):
         load_config({})
-    config = load_config({"NODE_KEY": "k" * 16, "GHOSTSEATS_URL": "https://gs.example/"})
+    config = load_config({"NODE_KEY": "k" * 16, "SYNAPSE_URL": "https://gs.example/"})
     assert config.readings_url == "https://gs.example/api/readings"
     assert (config.node_id, config.seat_id, config.serial_port) == ("table-1", "t1-s1", None)
+
+
+@pytest.mark.parametrize(
+    ("env", "url"),
+    [
+        ({}, "http://localhost:8000/api/readings"),
+        ({"GHOSTSEATS_URL": "https://old.example"}, "https://old.example/api/readings"),
+        (
+            {"SYNAPSE_URL": "https://new.example", "GHOSTSEATS_URL": "https://old.example"},
+            "https://new.example/api/readings",
+        ),
+    ],
+)
+def test_backend_url_prefers_the_new_name_and_keeps_the_old_one(
+    env: dict[str, str], url: str
+) -> None:
+    assert load_config({"NODE_KEY": "k" * 16, **env}).readings_url == url
 
 
 def test_payload_matches_the_readings_contract() -> None:

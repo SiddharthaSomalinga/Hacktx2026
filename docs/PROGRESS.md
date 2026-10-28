@@ -9,7 +9,7 @@ Session log. Concrete changes, commands and observed results only.
   (`eb8474c`), with CI green.
 - **Live:** `https://64.177.55.143.sslip.io` (server 2 at `45.32.219.190`), D57. Still runs the
   D57 build; nothing from D59 or D60 is deployed.
-- **Tests:** 236 pass with Postgres (`make test-db`); 204 pass and 32 skip without it; bridge 10;
+- **Tests:** 236 pass with Postgres (`make test-db`); 204 pass and 32 skip without it; bridge 13;
   frontend 32 (Vitest); browser e2e 1 (Playwright, against the compose stack). Live e2e: 114/114
   (Session 6).
 - **Open questions:** Q14, Q19, Q21, Q22 (PLAN).
@@ -712,6 +712,25 @@ Caught before committing:
   address.
 - Push to real devices; `npm audit` reports 4 low findings, all in `workbox-build`'s
   `deepmerge`, already present before this session.
+
+## 2026-10-27 — Session 12: review fixes (D62), branch `v5-status`
+
+### README and leftovers
+- README: every decision, requirement and question id rewritten in plain words;
+  `grep -nE '\b(D[0-9]+|FR-[0-9]+|NFR-[0-9]+|Q[0-9]+|HW-[0-9]+)\b' README.md` matches only the
+  Arduino pin `D2`.
+- Demo: `docs/images/demo.gif` (6,212,590 bytes, 360×779, 374 frames, 31.2 s) → H.264 mp4,
+  CRF 18, `-tune animation`, square pixels, original frame timing: 895,901 bytes, 360×778,
+  31.2 s. Frames at 2, 9, 16, 24 and 30 s checked by eye. Homebrew's ffmpeg failed (the
+  Command Line Tools predate macOS 14), so the encode used the static ffmpeg 7.1 from the
+  `imageio-ffmpeg` wheel, run through `uvx`.
+- Bridge: `SYNAPSE_URL`, then `GHOSTSEATS_URL`, then `http://localhost:8000`; three new
+  parametrized cases (default, old name, new name wins). 13 bridge tests pass.
+- `backend/Makefile`: `seed-demo` and `cards` added to `.PHONY` (a script now finds no target
+  missing and none undefined); the fake-node help no longer says "Pi bridge".
+- `frontend/vite.config.ts`: `API_PROXY_TARGET` overrides the dev proxy target.
+- `backend/README.md`: Tiger's connection limit (105) and the Vultr deploy replace "not checked"
+  and "not deployed"; push on real devices is still listed as unverified.
 
 ## Next steps
 1. **Before redeploying,** check each server's Caddyfile upstream (bug 1). Then
