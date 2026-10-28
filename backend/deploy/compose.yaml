@@ -14,6 +14,10 @@ services:
       # own iptables chain, so ufw alone does not keep a 0.0.0.0 binding off the internet.
       - "127.0.0.1:8000:8000"
     restart: unless-stopped
+    # Above uvicorn's 6 s graceful shutdown, so live streams are closed before SIGKILL (D61).
+    stop_grace_period: 15s
+    ulimits:
+      nofile: 65536  # one socket per open live stream, behind Caddy
     logging:
       driver: json-file
       options:

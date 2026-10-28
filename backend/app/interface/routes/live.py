@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from contextlib import aclosing
 from typing import Annotated
 
@@ -11,6 +12,8 @@ from starlette.types import Message, Receive, Scope, Send
 
 from app.interface.deps import OptionalUserId, ServicesDep
 from app.services.live import LiveEvent, LiveService, Subscription
+
+log = logging.getLogger("ghostseats.live")
 
 router = APIRouter(prefix="/api", tags=["live"])
 
@@ -67,6 +70,11 @@ class LiveStream(Response):
                         await self._write(send, encode(event))
         except TimeoutError:
             pass  # stalled: the connection is abandoned with the stream
+        except anyio.get_cancelled_exc_class():
+            # Only the server cancels a stream from outside: its graceful-shutdown timeout ran
+            # out. Ending here, rather than re-raising, spares the log one traceback per phone;
+            # clients reconnect to whichever instance is up.
+            log.info("live stream closed by server shutdown")
         finally:
             self._live.close(self._sub)
 

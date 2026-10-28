@@ -40,5 +40,6 @@ HEALTHCHECK --interval=10s --timeout=3s --start-period=20s --retries=3 \
 # Caddy on the host terminates TLS (D57); trust its X-Forwarded-* headers.
 ENTRYPOINT ["sh", "/usr/local/bin/entrypoint.sh"]
 # The metrics directory is emptied on every start: samples from a previous run's processes
-# would otherwise be summed into this one's.
-CMD ["sh", "-c", "rm -rf \"$PROMETHEUS_MULTIPROC_DIR\" && mkdir -p \"$PROMETHEUS_MULTIPROC_DIR\" && exec uvicorn app.main:build --factory --host 0.0.0.0 --port 8000 --workers \"$WEB_CONCURRENCY\" --proxy-headers --forwarded-allow-ips '*' --no-access-log --log-config app/log_config.json"]
+# would otherwise be summed into this one's. Live streams never end on their own, so shutdown
+# gives open connections 6 s and then closes them; clients reconnect (D61).
+CMD ["sh", "-c", "rm -rf \"$PROMETHEUS_MULTIPROC_DIR\" && mkdir -p \"$PROMETHEUS_MULTIPROC_DIR\" && exec uvicorn app.main:build --factory --host 0.0.0.0 --port 8000 --workers \"$WEB_CONCURRENCY\" --proxy-headers --forwarded-allow-ips '*' --no-access-log --log-config app/log_config.json --timeout-graceful-shutdown 6"]
