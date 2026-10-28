@@ -18,6 +18,7 @@ from app.interface.observability import RequestContext, configure_logging
 from app.interface.routes import (
     account,
     host,
+    live,
     matches,
     metrics,
     public,
@@ -80,6 +81,7 @@ def create_app(settings: Settings, services: Services) -> FastAPI:
         matches,
         safety,
         push,
+        live,
         metrics,
     ):
         app.include_router(module.router)

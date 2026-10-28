@@ -19,7 +19,7 @@ import json
 import logging
 import math
 import random
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator
 from dataclasses import dataclass, field
 
 import anyio
@@ -36,6 +36,10 @@ from app.services.views import Cached
 log = logging.getLogger("ghostseats.live")
 
 BUILDINGS = "*"  # the buildings list's key; every other key is a building id
+
+
+def _json(value: object) -> str:
+    return json.dumps(value, separators=(",", ":"))  # compact, like the snapshots
 
 
 @dataclass(frozen=True)
@@ -95,7 +99,7 @@ class Subscription:
         building = self._sent.get(self.building_id) if self.building_id else None
         return format_version(self._sent[BUILDINGS], building)
 
-    async def events(self) -> AsyncIterator[LiveEvent]:
+    async def events(self) -> AsyncGenerator[LiveEvent]:
         """Snapshots and invalidations as they come; a ping after LIVE_PING_S of quiet. The
         first round never waits, so a client that already has everything gets a ping."""
         first = True
@@ -115,10 +119,10 @@ class Subscription:
                     sent = True
             if self._topics:
                 topics, self._topics = sorted(self._topics), set()
-                yield LiveEvent("invalidate", json.dumps(topics), self._id())
+                yield LiveEvent("invalidate", _json(topics), self._id())
                 sent = True
             if not sent:
-                yield LiveEvent("ping", json.dumps(self._hub.health(self)), self._id())
+                yield LiveEvent("ping", _json(self._hub.health(self)), self._id())
 
 
 class LiveHub:

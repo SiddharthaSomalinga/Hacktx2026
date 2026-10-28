@@ -88,6 +88,9 @@ class RecordingMetrics:
         self.ticks: list[int] = []
         self.pushes: list[PushOutcome] = []
         self.ai_fallbacks: list[str] = []
+        self.streams_open = 0
+        self.streams_closed: list[float] = []
+        self.bytes: dict[str, int] = {}
 
     def observe_request(self, method: str, route: str, status: int, seconds: float) -> None:
         self.requests.append((method, route, status))
@@ -100,6 +103,16 @@ class RecordingMetrics:
 
     def count_ai_fallback(self, call: str) -> None:
         self.ai_fallbacks.append(call)
+
+    def stream_opened(self) -> None:
+        self.streams_open += 1
+
+    def stream_closed(self, seconds: float) -> None:
+        self.streams_open -= 1
+        self.streams_closed.append(seconds)
+
+    def count_bytes(self, route: str, n: int) -> None:
+        self.bytes[route] = self.bytes.get(route, 0) + n
 
     def render(self, outbox_unsent: int) -> tuple[bytes, str]:
         return f"outbox_unsent {outbox_unsent}\n".encode(), "text/plain; charset=utf-8"

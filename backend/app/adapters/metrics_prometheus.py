@@ -15,6 +15,7 @@ from prometheus_client import (
     CONTENT_TYPE_LATEST,
     CollectorRegistry,
     Counter,
+    Gauge,
     Histogram,
     generate_latest,
 )
@@ -52,6 +53,26 @@ class PrometheusMetrics:
             ["outcome"],
             registry=r,
         )
+        # Live streams (D61) stay open for minutes to hours; they are kept out of the request
+        # histogram, whose percentiles they would swamp.
+        self._streams = Gauge(
+            "ghostseats_live_streams",
+            "Live streams open now",
+            multiprocess_mode="livesum",
+            registry=r,
+        )
+        self._stream_seconds = Histogram(
+            "ghostseats_live_stream_duration_seconds",
+            "How long a live stream stayed open",
+            buckets=(1, 10, 60, 300, 900, 1800, 3600, 4 * 3600, float("inf")),
+            registry=r,
+        )
+        self._bytes = Counter(
+            "ghostseats_http_response_bytes",
+            "Response body bytes sent, by route template",
+            ["route"],
+            registry=r,
+        )
         self._ai_fallbacks = Counter(
             "ghostseats_ai_fallbacks",
             "AI calls answered by the deterministic fallback after a failure",
@@ -71,6 +92,16 @@ class PrometheusMetrics:
 
     def count_ai_fallback(self, call: str) -> None:
         self._ai_fallbacks.labels(call).inc()
+
+    def stream_opened(self) -> None:
+        self._streams.inc()
+
+    def stream_closed(self, seconds: float) -> None:
+        self._streams.dec()
+        self._stream_seconds.observe(seconds)
+
+    def count_bytes(self, route: str, n: int) -> None:
+        self._bytes.labels(route).inc(n)
 
     def render(self, outbox_unsent: int) -> tuple[bytes, str]:
         if self._multiprocess_dir is None:

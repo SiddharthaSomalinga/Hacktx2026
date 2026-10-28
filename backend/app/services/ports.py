@@ -104,6 +104,9 @@ class Metrics(Protocol):
     def observe_tick(self, seconds: float, due: int) -> None: ...
     def count_push(self, outcome: PushOutcome) -> None: ...
     def count_ai_fallback(self, call: str) -> None: ...
+    def stream_opened(self) -> None: ...
+    def stream_closed(self, seconds: float) -> None: ...
+    def count_bytes(self, route: str, n: int) -> None: ...
     def render(self, outbox_unsent: int) -> tuple[bytes, str]:
         """The exposition and its media type."""
         ...
@@ -122,6 +125,15 @@ class NullMetrics:
         pass
 
     def count_ai_fallback(self, call: str) -> None:
+        pass
+
+    def stream_opened(self) -> None:
+        pass
+
+    def stream_closed(self, seconds: float) -> None:
+        pass
+
+    def count_bytes(self, route: str, n: int) -> None:
         pass
 
     def render(self, outbox_unsent: int) -> tuple[bytes, str]:
