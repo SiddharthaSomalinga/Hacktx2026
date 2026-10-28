@@ -1,5 +1,5 @@
 """The operational scripts' pure parts: VAPID keys, demo env, QR sheet, fake-node payload,
-seeding, cards."""
+seeding, cards, load-check latency."""
 
 from __future__ import annotations
 
@@ -14,6 +14,7 @@ from py_vapid import Vapid  # the class pywebpush signs with
 from scripts import card_images
 from scripts.demo_env import KEYS, write_once
 from scripts.fake_node import STATES, FakeNode
+from scripts.load_check import merge_latency, probe_state
 from scripts.seat_qr import seat_url, sheet
 from scripts.seed_history import sensed
 from scripts.vapid_keys import generate
@@ -81,3 +82,21 @@ def test_demo_env_is_written_once_private_and_shell_safe(tmp_path: Path) -> None
     make_settings(**{k.lower(): v for k, v in values.items()})  # the app accepts every value
     assert not write_once(path, {})
     assert path.read_text() == first  # a restart keeps sessions and subscriptions valid
+
+
+def test_load_check_pairs_each_flip_with_each_phones_first_sight() -> None:
+    flips = [(100.0, "occupied"), (112.0, "open")]
+    phones = [
+        [(99.0, "open"), (100.4, "occupied"), (113.0, "open")],  # saw both
+        [(99.0, "open"), (99.8, "occupied"), (115.5, "open")],  # saw one just before T0
+        [(99.0, "open"), (112.5, "occupied")],  # saw the first flip only after the second
+    ]
+    delays, missed = merge_latency(flips, phones)
+    assert [round(d, 1) for d in delays] == [0.4, -0.2, 1.0, 3.5]
+    assert missed == 2  # phone 3 missed both: its "occupied" came after the next flip
+
+
+def test_load_check_finds_the_probe_seat_in_a_snapshot() -> None:
+    body = b'{"seats":[{"id":"load-probe-s1","position":1,"state":"occupied"}]}'
+    assert probe_state(body) == "occupied"
+    assert probe_state(b'{"seats":[]}') is None
