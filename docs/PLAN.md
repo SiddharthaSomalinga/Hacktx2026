@@ -659,7 +659,7 @@ URL; server 2 is a hot backup at its own address. Both use Tiger Data. Deploy:
 - Planned hardware: thermal for the person plus IR for belongings, feeding the existing
   `human_present` / `object_present` (Q14).
 - The team section lists the four names only.
-- `hacktx-2026` tags `2197e21`, the last commit before the 11:30 demo.
+- `hacktx-2026` tags `6f55583`, the last commit before the 11:30 demo.
 - Layout moves, branch deletion, CI and a license are out of scope for this pass.
 
 **D59 — Repo layout, CI, live link, demo GIF.** The author's call, after D58.

@@ -545,7 +545,7 @@ quickstart that failed from a fresh clone. Work is on `v3-repoaudit`; nothing pu
 ### Branch and tag
 - `v3-repoaudit` starts at local `v2-frontendredo` (`8b4d296`), which already holds `main`, the
   unpushed Synapse rename (`63619cd`) and the README title fix.
-- `hacktx-2026` (annotated) → `2197e21`, Sun 11:17, the last commit before the 11:30 demo.
+- `hacktx-2026` (annotated) → `6f55583`, Sun 11:17, the last commit before the 11:30 demo.
   Local only.
 - Removed `firmware/Transmitter Code from Arudino.txt`, a Next.js BLE component, not firmware.
 
