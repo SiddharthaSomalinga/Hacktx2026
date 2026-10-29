@@ -3,7 +3,7 @@ RUN := uv run --frozen
 DB_CONTAINER := ghostseats-db
 LOCAL_TEST_DB := postgresql://postgres:ghostseats@localhost:5433/ghostseats_test
 
-.PHONY: help sync dev test test-db lint fmt typecheck check db-up db-create db-down db-init seed seed-history policies fake-node qr vapid-keys load-check muse-check image deploy
+.PHONY: help sync dev test test-db lint fmt typecheck check db-up db-create db-down db-init seed seed-history policies fake-node qr vapid-keys load-check seed-demo cards muse-check image deploy
 
 help: ## List targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-14s %s\n", $$1, $$2}'
@@ -58,7 +58,7 @@ policies: ## Compression, retention and the history aggregate (D31, D32)
 seed-history: ## Write HISTORY_WINDOW_H of change-only readings for every seat
 	$(RUN) python -m scripts.seed_history
 
-fake-node: ## Interactive stand-in for the Pi bridge
+fake-node: ## Interactive stand-in for the sensor and serial bridge
 	$(RUN) python -m scripts.fake_node
 
 qr: ## Printable QR sheet for /seat/<id> (ORIGIN=https://…)

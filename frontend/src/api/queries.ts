@@ -65,12 +65,12 @@ export const useBuilding = (id: string | undefined) =>
   useQuery(polled(keys.building(id ?? ''), () => endpoints.building(id ?? ''), id !== undefined))
 
 /** A signature of the seats in scope: recommend refetches exactly when one of them changes. */
-function stateSignature(detail: BuildingDetail | undefined, floor?: number): string {
+export function stateSignature(detail: BuildingDetail | undefined, floor?: number): string {
   if (!detail) return ''
   return detail.floors
     .filter((f) => floor === undefined || f.floor === floor)
-    .flatMap((f) => f.tables.flatMap((t) => t.seats.map((s) => s.state[0])))
-    .join('')
+    .flatMap((f) => f.tables.flatMap((t) => t.seats.map((s) => `${s.id}:${s.state}`)))
+    .join(',')
 }
 
 export function useRecommendation(

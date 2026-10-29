@@ -1,11 +1,13 @@
 """Serial bridge: the demo table's Arduino (IR sensor) → POST /api/readings (D39, HW-7..10).
 
     pip install -r bridge/requirements.txt
-    GHOSTSEATS_URL=https://<host> NODE_KEY=<key> python bridge/arduino_bridge.py
+    SYNAPSE_URL=https://<host> NODE_KEY=<key> python bridge/arduino_bridge.py
 
 The sketch (firmware/HACKATHON) prints "occupied: true|false ..." about 20 times a second and
 drives its own LEDs. The bridge posts on every change and at least every HEARTBEAT_S, so the
 backend never marks the seat offline while the sensor is connected.
+
+SYNAPSE_URL defaults to http://localhost:8000; the older name GHOSTSEATS_URL still works (D62).
 
 One IR sensor cannot tell a person from a bag, so human_present mirrors object_present (Q14).
 """
@@ -41,7 +43,9 @@ def load_config(env: dict[str, str]) -> Config:
     node_key = env.get("NODE_KEY", "")
     if not node_key:
         raise SystemExit("NODE_KEY must be set (the backend's NODE_KEY, never committed)")
-    base = env.get("GHOSTSEATS_URL", "http://localhost:8000").rstrip("/")
+    base = (
+        env.get("SYNAPSE_URL") or env.get("GHOSTSEATS_URL") or "http://localhost:8000"
+    ).rstrip("/")
     return Config(
         readings_url=f"{base}/api/readings",
         node_key=node_key,

@@ -24,6 +24,7 @@ Decision numbers refer to `PLAN.md`, decision log.
 - **§8 (D38, D41)** `MUSE_BASE_URL`, `MUSE_MODEL`, `DB_TIMEOUT_S`.
 - **FR-31 (D56)** Demo mode lets simulated hosts take and accept requests; off by default.
 - **§7 (D53)** `GET /api/seats/:id`; block and report by request or match id; ids on the match and search status.
+- **HW-7 (D62)** The bridge's backend URL setting is `SYNAPSE_URL`; `GHOSTSEATS_URL` still works.
 - **§6** Adds `buildings.lat/lng`, `keywords`, `offered_group`, change-only `seat_readings` with offline markers, `push_subscriptions` and `notification_outbox`. **§7** New and changed endpoints, node key, error codes. **§8** New keys and an environment table.
 
 # 1. Overview
@@ -376,7 +377,7 @@ JSON over HTTPS. Errors: `{"error": "<code>", "message": "<sentence>"}` with a 4
 
 ## 10.4 Bridge
 
-- **HW-7** The bridge shall map seat positions to seat ids from config (`SERIAL_PORT`, `BACKEND_URL`, `NODE_ID`, `NODE_KEY`, `SEAT_IDS`).
+- **HW-7** The bridge shall map seat positions to seat ids from config (`SERIAL_PORT`, `SYNAPSE_URL`, `NODE_ID`, `NODE_KEY`, `SEAT_IDS`; D62).
 - **HW-8** The bridge shall convert each `R` message to `POST /api/readings`, sending the `X-Node-Key` header, and write the response as an `L` message (green → G, red → R, yellow → Y, blue_blink → B, off → O).
 - **HW-9** If the backend does not respond, the bridge shall send nothing, so the node's local mode takes over.
 - **HW-10** The bridge shall log every request and response with a timestamp.

@@ -1,4 +1,4 @@
-"""Interactive stand-in for the Pi bridge: posts the same payload every 2 s (HW-3, HW-8).
+"""Stand-in for the sensor and serial bridge: posts the same payload every 2 s (HW-3, HW-8).
 
     uv run python -m scripts.fake_node --seats t1-s1,t1-s2
     > 1 p      seat 1 has a person (object + human)
