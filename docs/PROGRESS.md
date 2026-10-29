@@ -803,7 +803,10 @@ Caught before committing:
   and I assumed it was local. It wrote 10 `seat_readings` rows for `t1-s1` (05:21:03–05:21:21
   UTC), overwrote its `seat_state` (it read `offline` again 30 s later), and updated
   `nodes.table-1`. Nothing else was touched (no sessions, no outbox rows). Every later run
-  sets `DATABASE_URL` to the local container and asserts the host first.
+  sets `DATABASE_URL` to the local container and asserts the host first. Cleaned up on
+  Oct 29: 11 rows deleted (the 10 readings and the offline marker the first one wrote at the
+  old `last_seen` + `OFFLINE_S`), and `seat_state.last_seen` restored, so the seat's next
+  reading writes no stray marker.
 - A feed test's `pg_terminate_backend` matched listeners in every database on the local
   server, including a running load test's (fixed: `AND datname = current_database()`). That
   run was discarded.
@@ -831,6 +834,12 @@ Caught before committing:
    fresh stacks, as "apiRequestContext.post: Request context disposed". Cause: `sensePerson`'s
    stop only cleared a flag, so a reading in flight could outlive the test and reject once
    Playwright disposed `request`. Fix: stop awaits the loop. Then 3 of 3 full runs passed.
+
+### History
+- `main` squashed from 136 to 80 commits: straight runs of my commits on Oct 25 and Oct 27,
+  and 11 merges of `v1backend` whose lines are merged again later. Each kept commit has its
+  original tree, author and dates. Teammates' commits are unchanged. The final tree and the
+  tagged tree are identical; `hacktx-2026` is now `6f55583`.
 
 ## Next steps
 1. **Before redeploying,** check each server's Caddyfile upstream (bug 1). Then
