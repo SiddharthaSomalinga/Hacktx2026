@@ -12,10 +12,10 @@ import { SafetyActions } from '../match/Safety'
 import styles from './InboxCard.module.css'
 
 /** FR-36: who (first name and major, D43), what, which table, and Accept / Not now / Mute. */
-export function InboxCard({ item }: { item: InboxItem }) {
+export function InboxCard({ item, fetchedAt }: { item: InboxItem; fetchedAt: number }) {
   const navigate = useNavigate()
   const client = useQueryClient()
-  const left = useCountdown(item.seconds_left)
+  const left = useCountdown(item.seconds_left, fetchedAt)
   const refresh = () => Promise.all([client.invalidateQueries({ queryKey: keys.inbox }), client.invalidateQueries({ queryKey: keys.me })])
   const accept = useMutation({
     mutationFn: () => endpoints.accept(item.request_id),

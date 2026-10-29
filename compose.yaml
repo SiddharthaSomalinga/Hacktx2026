@@ -58,6 +58,7 @@ services:
     ports:
       - "127.0.0.1:${PORT:-8000}:8000"
     restart: unless-stopped
+    stop_grace_period: 15s  # above uvicorn's 6 s graceful shutdown for live streams (D61)
     depends_on:
       init:
         condition: service_completed_successfully

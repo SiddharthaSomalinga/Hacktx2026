@@ -10,6 +10,7 @@ from app.domain.types import (
     Led,
     PublicState,
     Reading,
+    SeatChange,
     SeatState,
     StoredReading,
     Timers,
@@ -90,6 +91,17 @@ def human_present_now(s: SeatState, now: datetime, t: Timers) -> bool:
 def absent_for(s: SeatState, now: datetime) -> timedelta:
     """How long since a person was last seen on this seat; NEVER if no person ever was."""
     return NEVER if s.last_human is None else now - s.last_human
+
+
+def seat_change(before: SeatState, after: SeatState, now: datetime, t: Timers) -> SeatChange:
+    """What a write of `after` over `before` changes for others at `now` (D61). Changes that
+    come later from time alone (ghost timer, offline, presence lapsing) are not writes; the
+    live hub's periodic check and the scheduler's sweep find those."""
+    if public_state(before, now, t) is not public_state(after, now, t):
+        return SeatChange.PUBLIC
+    if human_present_now(after, now, t) and not human_present_now(before, now, t):
+        return SeatChange.PRESENCE
+    return SeatChange.NONE
 
 
 def rows_to_store(s: SeatState, reading: Reading, now: datetime, t: Timers) -> list[StoredReading]:

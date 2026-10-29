@@ -39,6 +39,7 @@ def build_services(settings: Settings) -> Services:
         settings.database_read_url,
         pool_size=settings.db_pool_size,
         timeout_s=settings.db_timeout_s,
+        feed_probe_s=settings.live_feed_probe_s,
     )
     ctx = Context(
         repo=repo,
@@ -54,6 +55,12 @@ def build_services(settings: Settings) -> Services:
         vapid_public_key=settings.vapid_public_key,
         demo_hosts=settings.demo_hosts,
         demo_accept=timedelta(seconds=settings.demo_accept_s),
+        search_stall=timedelta(seconds=settings.search_stall_s),
+        live_enabled=settings.live_enabled,
+        live_check_s=settings.live_check_s,
+        live_ping_s=settings.poll_web_s,
+        live_retry_s=settings.live_retry_s,
+        live_stall_s=settings.live_stall_s,
         metrics=PrometheusMetrics(settings.prometheus_multiproc_dir),
     )
     return Services.build(ctx)

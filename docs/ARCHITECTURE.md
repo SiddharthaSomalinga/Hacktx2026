@@ -15,8 +15,9 @@ numbers (`D18`, see the decision log in `PLAN.md`) instead of restating them.
  └──────────────┘                      └──────────────┘  change + heartbeat  │ engine · matching · AI   │
    LEDs follow the IR reading                                                │ scheduler tick · outbox  │
                                                                              └──┬──────────▲─────────┬──┘
-                                                         SQL (primary + read)   │          │ JSON    │ web push
-                                                                 ┌──────────────▼───┐ ┌────┴───────┐ │ (VAPID)
+                                                SQL, LISTEN/NOTIFY (primary)    │          │ JSON,   │ web push
+                                                                                │          │ SSE     │ (VAPID)
+                                                                 ┌──────────────▼───┐ ┌────┴───────┐ │
                                                                  │ Tiger Data:      │ │ Web client │◄┘
                                                                  │ Postgres +       │ │ + PWA      │
                                                                  │ Timescale        │ │ (phones)   │
@@ -82,7 +83,8 @@ and an import-guard test enforces that.
 | Module | Responsibility | Requirements |
 |---|---|---|
 | `domain/types.py` | Enums, frozen records, `Timers` | §6 status values |
-| `domain/seat_engine.py` | `candidate_of`, `apply_reading`, `public_state`, `led_for`, `human_present_now`, `absent_for` (§4) | FR-1..7, 22 |
+| `domain/seat_engine.py` | `candidate_of`, `apply_reading`, `public_state`, `led_for`, `human_present_now`, `absent_for`, `seat_change` (§4, §5) | FR-1..7, 22 |
+| `domain/live.py` | Which per-user topics a change touches; live event ids (§5) | D61 |
 | `domain/simulation.py` | `simulated_state(seat_id, now, busyness, t)` (§9) | FR-47 |
 | `domain/geometry.py` | Seat distance, nearest open seat, haversine | FR-11, 37, 39 |
 | `domain/recommend.py` | Widening recommendation with `level` (§5) | FR-11 (D21) |
@@ -91,18 +93,20 @@ and an import-guard test enforces that.
 | `domain/catalog.py` | UT course codes → title and subject; keyword aliases | FR-18, 19 |
 | `domain/topic_rules.py` | Fallback normalizer, fallback icebreaker, `card_key_for` | §9 |
 | `domain/notifications.py` | Which transition emits which outbox `kind` and payload (first name and major only before accept, D43) | FR-52, 53 |
-| `services/ports.py` | `Repository`, `TopicAI`, `Notifier`, `Clock`, `Metrics` protocols | — |
+| `services/ports.py` | `Repository`, `TopicAI`, `Notifier`, `Clock`, `Metrics` protocols; the hint types; `WRITE_EFFECTS` and `READS`, which classify every `Tx` method (§5) | — |
 | `services/lifecycle.py` | Applies `advance_*` decisions under row locks; the one place where host, search and match transitions trigger each other | NFR-2, D29 |
 | `services/facts.py` | Per-transaction snapshot answering "what state is this seat" and "is this host findable", identically for every service | FR-24 |
 | `services/ai_guard.py` | Wraps any `TopicAI`: an exception or out-of-bounds output becomes the deterministic fallback | NFR-3 |
 | `services/topics.py` | `topic_cache` in front of `normalize_topic` | §9 |
+| `services/live.py` | The live hub and `LiveService`: the only async service (§5) | FR-10, D61 |
 | `services/*.py` | `readings`, `map`, `history`, `auth`, `host`, `search`, `requests`, `match`, `safety`, `push`, `scheduler`, `metrics` | — |
-| `adapters/repo_postgres.py` | All SQL, parameterized only | — |
+| `adapters/repo_postgres.py` | All SQL, parameterized only, including the hint flush and the LISTEN feed | — |
+| `adapters/hints.py` | What a transaction recorded for hints, and their wire format, shared by both repositories | D61 |
 | `adapters/ai_fallback.py`, `ai_muse.py` | `TopicAI` implementations (§8) | NFR-3 |
 | `adapters/push_webpush.py` | `Notifier` over `pywebpush` | FR-51..53 |
 | `adapters/metrics_prometheus.py` | `Metrics` over `prometheus_client`; sums every uvicorn process's samples when `PROMETHEUS_MULTIPROC_DIR` is set (D60) | — |
 | `interface/routes/*.py` | Parse, call one service, return. No business `if`s | §7 |
-| `interface/observability.py` | Request id per request (echoed as `X-Request-ID`), one access line with the route template, JSON log lines when `LOG_FORMAT=json` (D60) | — |
+| `interface/observability.py` | Request id per request (echoed as `X-Request-ID`), one access line with the route template, JSON log lines when `LOG_FORMAT=json` (D60). A live stream is recorded as a stream, not a request | — |
 
 **Ports and fakes (D3).** `Repository` has two implementations,
 `PostgresRepository` and `InMemoryRepository` (`tests/fakes.py`). Both pass
@@ -166,6 +170,49 @@ POST /api/readings  {node_id, readings[]}   header X-Node-Key
 - The building list and building detail are both served from snapshots, read from the replica connection when `DATABASE_READ_URL` is set.
 - The cache is derived data, so any instance can rebuild it (NFR-8).
 
+**Live stream (D61).** `GET /api/live` replaces polling while it is healthy (FR-10).
+
+```
+ commit with a public seat change ──► NOTIFY synapse_live 'm:pcl' ──┐   (every instance)
+ commit touching a user's rows     ──► NOTIFY synapse_live 'u:alex:search' ─┤
+                                                                     ▼
+ each process: LiveHub ◄── LISTEN (one unpooled primary connection; probe every LIVE_FEED_PROBE_S)
+   watched snapshots: "*" (the buildings list) and each building a local stream shows
+   every LIVE_CHECK_S, or at once on a hint: rebuild (MapService, fresh) → ETag changed? → offer
+   streams: one slot per snapshot (latest wins) + pending topics; ping every POLL_WEB_S
+```
+
+- **Correctness never depends on a hint.** Every event is read back from the database. The
+  periodic rebuild catches what time alone changes (ghost timer, offline, simulation slots),
+  and a missed notification only costs latency. A new stream is never served a snapshot that
+  was last confirmed more than `MAP_CACHE_S` ago (NFR-8).
+- **Cost.** One rebuild per watched snapshot per `LIVE_CHECK_S` per process, whatever the
+  number of phones. A dirty snapshot is rebuilt at once, unless it was broadcast less than
+  `LIVE_CHECK_S` ago: under churn, each snapshot goes out at most once per interval.
+- **Rebuilds run one at a time** on a hub-only thread limiter, apart from the routes' 40
+  threads. A sequence number stops an older rebuild that finishes late from replacing a newer
+  one.
+- **Events carry the GET bodies byte for byte**, so FR-6 holds by construction, and the
+  client primes its ETag store with them: a fallback poll gets a 304.
+- **Event ids** are `<buildings version>.<building version>`. A reconnecting client sends the
+  last one back (`Last-Event-ID`), and an unchanged snapshot is not resent.
+- **A slow client** skips states instead of queueing them. A write that can't complete within
+  `LIVE_STALL_S` drops the client.
+
+**Where hints come from.** The repository's writers record them, and the transaction sends
+them just before COMMIT, so a rollback sends nothing.
+- `save_seat_state(state, *, change)` takes the seat's `SeatChange` from the pure
+  `seat_change(before, after, now, t)`. The keyword is required, so mypy rejects a writer that
+  forgets it.
+  - `public` reaches the building's map, the live hosts at that table (their own seat; FR-24's
+    open seat), and both sides of an active match whose assigned seat is on that floor
+    (FR-39).
+  - `presence` reaches only the host at that seat.
+  - `none` (`last_seen` moved, a blink) sends nothing.
+- Session, search, request, match and block writes hint the users they name; a request or
+  match also reaches the host through its session. `WRITE_EFFECTS` lists every writer.
+- Time-only per-user changes have no write; the scheduler's sweep finds them (§14).
+
 **Recommendation (D21).**
 - `recommend(seats, selection)` tries `table` → `floor` → `building`.
 - At each level it takes the open seat nearest the selection; only if none is open does it take the nearest `likely_opening` seat (labeled). Ties go to the lowest position.
@@ -184,7 +231,11 @@ stored timestamps. Services apply them under row locks
 |---|---|
 | Any read or write of the entity | that entity |
 | Sensor ingest (§4) | host sessions and matches linked to the seat → presence rules |
-| Scheduler tick every `SCHEDULER_TICK_S` (§14) | rows past a time-only deadline: request expiry, match expiry, confirm grace |
+| Scheduler tick every `SCHEDULER_TICK_S` (§14) | rows past a time-only deadline: request expiry, match expiry, confirm grace; a joined search idle for `SEARCH_STALL_S` (D61) |
+
+Since D61 the app no longer polls, so the tick must cover every transition a read used to
+trigger. A test checks that after a tick, no per-user GET at the same instant writes
+anything.
 
 ### Host session (FR-20..28, D17, D18, D20, D23, D24)
 
@@ -342,7 +393,21 @@ class TopicAI(Protocol):                     # services/ports.py
 
 - **One origin.** The session cookie stays SameSite=Lax with no CORS, and the service worker scope covers the app.
 - **N instances** are safe because no state of record lives in memory (NFR-8). The scheduler uses `SKIP LOCKED` (§14), and caches are derived (§5).
-- **Connection budget (D34).** Every process opens a primary pool of `DB_POOL_SIZE` (default 5), plus a replica pool when `DATABASE_READ_URL` is set. Processes × instances × pools × `DB_POOL_SIZE` must stay below the database's `max_connections`. The local Timescale image allows 25, and 4 workers × 5 peaked at exactly 20 under load.
+- **Connection budget (D34, D61).**
+  - Every process opens a primary pool of `DB_POOL_SIZE` (default 5), a replica pool when
+    `DATABASE_READ_URL` is set, and one unpooled primary connection for the live feed.
+  - Processes × instances × (pools × `DB_POOL_SIZE` + 1) must stay below the database's
+    `max_connections`. The deploy uses 2 × 2 × 6 = 24 of Tiger's 105.
+  - The local Timescale image allows 25.
+- **Live streams (D61).**
+  - Every stream is its own upstream socket through Caddy, so the deploy raises the
+    container's `nofile` to 65536.
+  - uvicorn waits for open connections before it shuts down, so the image passes
+    `--timeout-graceful-shutdown 6`, and compose's `stop_grace_period` is 15 s. At the timeout
+    each stream ends quietly and its client reconnects.
+  - Caddy flushes `text/event-stream` responses as they are written.
+  - The feed needs a session-level connection: a pooler in transaction mode drops `LISTEN`.
+    Its probe detects that and falls back to the periodic rebuild.
 - **Outages (D35).** Connection failures become `Unavailable` in the repository and a 503 `database_unavailable` with `Retry-After: 5` at the API, after at most the 5 s pool wait. `/api/health` reports `db: false`.
 - **Host (D57, replacing D36's load balancer and D37's domain).** Two Vultr instances (1 vCPU, 2 GB, 2 GB swap), each running the same image from `backend/deploy/compose.yaml` with Caddy in front for HTTPS (Let's Encrypt on `<ip>.sslip.io`). Server 1 is the public URL; server 2 is a hot backup at its own address, so failing over means changing the URL. The container port is published on 127.0.0.1 only, so traffic reaches it through Caddy. `deploy.sh` updates one server at a time and waits for the container health check before the next.
 - **Network.** The bridge and the phones use the public URL. A phone hotspot is the backup network.
@@ -358,7 +423,8 @@ live OpenAPI (`npm run api:types` → `src/api/schema.gen.ts`).
 |---|---|---|
 | Routes | `src/app/router.tsx`, `paths.ts` | Every step has a URL: `/`, `/b/:id/:floor/:table`, `/b/:id/history`, `/login`, `/find`, `/search/:id`, `/seat/:id`, `/seat/:id/host`, `/host`, `/match/:id`. Push and QR links land on them |
 | Canvas | `src/app/Canvas.tsx`, `focus.tsx` | One canvas stays mounted; each route declares a focus (campus or a floor plan with marks). The docked panel shows the route |
-| Data | `src/api/queries.ts`, `poll.ts`, `freshness.ts` | TanStack Query. Polls every `POLL_WEB_S`, paused while hidden, ×2 backoff to 30 s, never sooner than `Retry-After`. Freshness comes from the last successful poll, never a per-seat time (FR-6) |
+| Data | `src/api/queries.ts`, `poll.ts`, `freshness.ts` | TanStack Query. Freshness comes from the last confirmed data, never a per-seat time (FR-6) |
+| Live stream | `src/app/useLive.ts`, `src/api/live.ts`, `liveStore.ts` | One `EventSource` per open app (D61). It carries the buildings list, the floor plan in focus and the user's refetch hints, writes snapshots straight into the query cache, and reconnects with backoff. A query polls (every `POLL_WEB_S`, ×2 backoff to 30 s, never sooner than `Retry-After`) only once its data is `LIVE_FOR_MS` old with nothing vouching for it. That is when the freshness pill stops saying "Live", so the D46 rules are unchanged. Logged out, `/api/me` never polls |
 | Campus map | `src/map/` | MapLibre on a self-hosted Protomaps extract (`public/map/`), style built from the CSS tokens. Footprints are OSM outlines keyed by building id, drawn as an SVG overlay colored by FR-8 (D51) |
 | Floor plan | `src/plan/` | Tables at x/y, chairs by position, one uniform scale with no overlap. State by shape and color (D45). Real buttons over an `aria-hidden` SVG |
 | PWA | `src/sw/sw.ts`, `public/manifest.webmanifest` | Workbox precache of the shell, fonts, tiles, glyphs, cards, icons. **Never caches `/api`.** Notification clicks are allow-listed to `/host`, `/match/:id`, `/search/:id` |
@@ -369,6 +435,9 @@ live OpenAPI (`npm run api:types` → `src/api/schema.gen.ts`).
 **v1.0 → v1.1:** the "Changes from v1.0" list at the top of REQUIREMENTS.
 
 **v1.1 → D53 (frontend redo):** `GET /api/seats/:id`; `/block` and `/report` accept `request_id` or `match_id` and resolve the other side server-side (`SafetyService`); `MatchOut` adds `building_id`, `table_id`; `SearchStatusOut` adds `request_id`, `joined`, `label`, `offered_group`. All additive except that `/block` and `/report` no longer require `user_id`.
+
+**D53 → D61 (live stream):** `GET /api/live` (§7, additive). FR-10 now reads "over the live
+stream while it is healthy, else by polling". New config keys: `SEARCH_STALL_S`, `LIVE_*`.
 
 **Source of truth → spec (D1):**
 
@@ -405,13 +474,23 @@ worker thread (each instance, `app/worker.py`):
   - `request_accepted`: the host's first name, allowed after accept (FR-43).
   - Never live location; never anything the matching UI wouldn't show.
 - **Client.** The service worker shows the notification. `notificationclick` focuses an open window or opens `/host` for host events and `/match/:id` or `/search/:id` for seeker events (D50).
+- **Push and the live stream (D61).** Push reaches a closed app; the stream keeps an open one
+  current. They are independent: a notification is never sent over the stream, and the stream
+  never carries anything a GET wouldn't show.
+- **The sweep.** After each tick, the worker evaluates every live host's status and every
+  active match's alternative seat at the previous and the current tick time, on the same data.
+  Users whose views differ get a `time` hint: a presence lapse (FR-24 away), a table-mate
+  going offline (a full table), an alternative seat moving (FR-39). Every instance sweeps, so a
+  client may get the same hint from each one; it coalesces them by not restarting a refetch
+  already in flight.
 
 ## 15. Scale design (D31, D32, NFR-8)
 
 | Pressure | Design |
 |---|---|
-| Map polling from many phones | Per-building snapshot for `MAP_CACHE_S`, `ETag`/`304`, replica reads |
+| Map updates for many phones | The live stream (D61): one rebuild per watched snapshot per instance, fanned out to every stream. Polling, with per-building snapshots, `ETag`/`304` and replica reads, is the fallback |
+| Per-user state | Topic-only hints over the stream; a client refetches only what changed |
 | Sensor write volume | Change-only `seat_readings`; compression and retention policies; hourly continuous aggregate |
 | Many app instances | No state of record in memory; `SKIP LOCKED` worker; signed cookies |
 | Lock contention | Row locks per seat, search or match only; AI calls never inside a lock |
-| Verification | `scripts/load_check.py`: 500 polling clients plus 50 fake nodes; results and hardware in PROGRESS (Session 3) |
+| Verification | `scripts/load_check.py`: polling or streaming phones (`--mode`), 50 fake nodes and a probe seat for change-to-screen latency; `scripts/proc_sample.py` for server CPU and memory. Results in PROGRESS (Sessions 3, 11, 13) |

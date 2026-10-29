@@ -31,12 +31,14 @@ class MapService:
         self._cache: dict[str, tuple[float, Cached]] = {}
         self._lock = threading.Lock()
 
-    def _cached(self, key: str, build: Callable[[], Cached]) -> Cached:
+    def _cached(self, key: str, build: Callable[[], Cached], fresh: bool) -> Cached:
+        """`fresh` skips the read but still refreshes the cache: the live hub must see a change
+        the moment it commits, and the pollers on this process benefit from its builds."""
         ttl = self._ctx.map_cache_s
         now = self._ctx.clock.monotonic()
         with self._lock:
             hit = self._cache.get(key)
-            if hit is not None and hit[0] > now:
+            if not fresh and hit is not None and hit[0] > now:
                 return hit[1]
         value = build()
         if ttl > 0:
@@ -65,8 +67,8 @@ class MapService:
                 )
         return out
 
-    def buildings(self) -> Cached:
-        return self._cached("buildings", lambda: to_cached(self.summaries()))
+    def buildings(self, *, fresh: bool = False) -> Cached:
+        return self._cached("buildings", lambda: to_cached(self.summaries()), fresh)
 
     def _detail(self, building_id: str) -> Cached:
         now = self._ctx.clock.now()
@@ -94,8 +96,8 @@ class MapService:
             }
         )
 
-    def building(self, building_id: str) -> Cached:
-        return self._cached(f"building:{building_id}", lambda: self._detail(building_id))
+    def building(self, building_id: str, *, fresh: bool = False) -> Cached:
+        return self._cached(f"building:{building_id}", lambda: self._detail(building_id), fresh)
 
     def recommend(
         self, building_id: str, floor: int | None, table_id: str | None

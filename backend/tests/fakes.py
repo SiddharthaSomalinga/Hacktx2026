@@ -7,13 +7,16 @@ including the uniqueness rules the database enforces with partial indexes.
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import copy
 import threading
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import AsyncIterator, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 
+from app.adapters.hints import PendingHints, merge
 from app.domain.types import (
     Building,
     HostSession,
@@ -24,14 +27,26 @@ from app.domain.types import (
     Search,
     SearchStatus,
     Seat,
+    SeatChange,
     SeatState,
     StoredReading,
     StudyRequest,
     Table,
     Topic,
     User,
+    UserChange,
 )
-from app.services.ports import Conflict, Lock, PushOutcome, PushResult, PushSubscription
+from app.services.ports import (
+    Conflict,
+    Hint,
+    Lock,
+    MapHint,
+    PushOutcome,
+    PushResult,
+    PushSubscription,
+    Resync,
+    UserHint,
+)
 
 T0 = datetime(2026, 10, 24, 18, 0, 0, tzinfo=UTC)
 HOUR = timedelta(hours=1)
@@ -73,6 +88,9 @@ class RecordingMetrics:
         self.ticks: list[int] = []
         self.pushes: list[PushOutcome] = []
         self.ai_fallbacks: list[str] = []
+        self.streams_open = 0
+        self.streams_closed: list[float] = []
+        self.bytes: dict[str, int] = {}
 
     def observe_request(self, method: str, route: str, status: int, seconds: float) -> None:
         self.requests.append((method, route, status))
@@ -85,6 +103,16 @@ class RecordingMetrics:
 
     def count_ai_fallback(self, call: str) -> None:
         self.ai_fallbacks.append(call)
+
+    def stream_opened(self) -> None:
+        self.streams_open += 1
+
+    def stream_closed(self, seconds: float) -> None:
+        self.streams_open -= 1
+        self.streams_closed.append(seconds)
+
+    def count_bytes(self, route: str, n: int) -> None:
+        self.bytes[route] = self.bytes.get(route, 0) + n
 
     def render(self, outbox_unsent: int) -> tuple[bytes, str]:
         return f"outbox_unsent {outbox_unsent}\n".encode(), "text/plain; charset=utf-8"
@@ -130,6 +158,7 @@ class _Data:
 class InMemoryTx:
     def __init__(self, d: _Data) -> None:
         self.d = d
+        self.recorded = PendingHints()
 
     # Places
     def buildings(self) -> list[Building]:
@@ -151,8 +180,9 @@ class InMemoryTx:
     def lock_seat_state(self, seat_id: str) -> SeatState | None:
         return self.d.states.get(seat_id)
 
-    def save_seat_state(self, state: SeatState) -> None:
+    def save_seat_state(self, state: SeatState, *, change: SeatChange) -> None:
         self.d.states[state.seat_id] = state
+        self.recorded.seat(state.seat_id, change)
 
     def touch_node(self, node_id: str, now: datetime) -> None:
         self.d.nodes[node_id] = now
@@ -185,9 +215,11 @@ class InMemoryTx:
             if s.live and (s.user_id == session.user_id or s.seat_id == session.seat_id):
                 raise Conflict("one live session per user and per seat")
         self.d.sessions[session.id] = session
+        self.recorded.user(session.user_id, UserChange.SESSION)
 
     def update_session(self, session: HostSession) -> None:
         self.d.sessions[session.id] = session
+        self.recorded.user(session.user_id, UserChange.SESSION)
 
     def session(self, session_id: str, lock: Lock = Lock.NONE) -> HostSession | None:
         return self.d.sessions.get(session_id)
@@ -207,9 +239,11 @@ class InMemoryTx:
         if search.status is SearchStatus.ACTIVE and self.active_search_for_user(search.seeker_id):
             raise Conflict("one active search per seeker")
         self.d.searches[search.id] = search
+        self.recorded.user(search.seeker_id, UserChange.SEARCH)
 
     def update_search(self, search: Search) -> None:
         self.d.searches[search.id] = search
+        self.recorded.user(search.seeker_id, UserChange.SEARCH)
 
     def search(self, search_id: str, lock: Lock = Lock.NONE) -> Search | None:
         return self.d.searches.get(search_id)
@@ -230,9 +264,15 @@ class InMemoryTx:
         ):
             raise Conflict("one pending request per search")
         self.d.requests[request.id] = request
+        self._record_pair(request.seeker_id, request.host_session_id, UserChange.REQUEST)
 
     def update_request(self, request: StudyRequest) -> None:
         self.d.requests[request.id] = request
+        self._record_pair(request.seeker_id, request.host_session_id, UserChange.REQUEST)
+
+    def _record_pair(self, seeker_id: str, host_session_id: str, change: UserChange) -> None:
+        self.recorded.user(seeker_id, change)
+        self.recorded.host(host_session_id, change)
 
     def request(self, request_id: str, lock: Lock = Lock.NONE) -> StudyRequest | None:
         return self.d.requests.get(request_id)
@@ -272,9 +312,11 @@ class InMemoryTx:
         ):
             raise Conflict("one active match per host session and per seeker")
         self.d.matches[match.id] = match
+        self._record_pair(match.seeker_id, match.host_session_id, UserChange.MATCH)
 
     def update_match(self, match: Match) -> None:
         self.d.matches[match.id] = match
+        self._record_pair(match.seeker_id, match.host_session_id, UserChange.MATCH)
 
     def match(self, match_id: str, lock: Lock = Lock.NONE) -> Match | None:
         return self.d.matches.get(match_id)
@@ -310,6 +352,8 @@ class InMemoryTx:
     # Safety
     def insert_block(self, user_id: str, blocked_user_id: str) -> None:
         self.d.blocks.add((user_id, blocked_user_id))
+        self.recorded.user(user_id, UserChange.BLOCK)
+        self.recorded.user(blocked_user_id, UserChange.BLOCK)
 
     def blocked_with(self, user_id: str) -> set[str]:
         return {b for a, b in self.d.blocks if a == user_id} | {
@@ -366,6 +410,16 @@ class InMemoryTx:
                 out.append(r.search_id)
         return sorted(set(out))
 
+    def idle_search_ids(self) -> list[str]:
+        pending = {
+            r.search_id for r in self.d.requests.values() if r.status is RequestStatus.PENDING
+        }
+        return sorted(
+            s.id
+            for s in self.d.searches.values()
+            if s.status is SearchStatus.ACTIVE and s.joined_at is not None and s.id not in pending
+        )
+
     def due_match_ids(self, now: datetime, host_absent_before: datetime) -> list[str]:
         out = []
         for m in self.d.matches.values():
@@ -395,21 +449,108 @@ class InMemoryTx:
         ]
         return [r.id for r in sorted(pending, key=lambda r: (r.created_at, r.id))]
 
+    # Live hints
+    def touch_users(self, user_ids: Sequence[str], change: UserChange) -> None:
+        for user_id in user_ids:
+            self.recorded.user(user_id, change)
+
+
+def resolve_hints(d: _Data, recorded: PendingHints) -> list[MapHint | UserHint]:
+    """Reference resolution of a transaction's recorded hints, read after its writes (D61)."""
+    out: list[MapHint | UserHint] = [
+        UserHint(user_id, frozenset(changes)) for user_id, changes in recorded.users.items()
+    ]
+    for session_id, changes in recorded.host_sessions.items():
+        session = d.sessions.get(session_id)
+        if session is not None:
+            out.append(UserHint(session.user_id, frozenset(changes)))
+    seat_watch = frozenset({UserChange.SEAT})
+    live = [s for s in d.sessions.values() if s.live]
+    for seat_id, change in recorded.seats.items():
+        seat = d.seats[seat_id]
+        if change is SeatChange.PRESENCE:
+            out += [UserHint(s.user_id, seat_watch) for s in live if s.seat_id == seat_id]
+            continue
+        out.append(MapHint(seat.building_id))
+        # Hosts at this table: their own seat's state, and whether the table has an open seat.
+        out += [
+            UserHint(s.user_id, seat_watch)
+            for s in live
+            if d.seats[s.seat_id].table_id == seat.table_id
+        ]
+        # Both sides of an active match whose assigned seat is on this floor (alt seat, FR-39).
+        for m in d.matches.values():
+            assigned = d.seats.get(m.assigned_seat_id) if m.assigned_seat_id else None
+            if (
+                m.status is MatchStatus.ACTIVE
+                and assigned is not None
+                and (assigned.building_id, assigned.floor) == (seat.building_id, seat.floor)
+            ):
+                host = d.sessions[m.host_session_id]
+                out += [UserHint(m.seeker_id, seat_watch), UserHint(host.user_id, seat_watch)]
+    return merge(out)
+
+
+class InMemoryFeed:
+    """Delivers committed hints to every consumer, whichever thread committed them."""
+
+    def __init__(self) -> None:
+        self._consumers: list[tuple[asyncio.AbstractEventLoop, asyncio.Queue[Hint]]] = []
+        self._lock = threading.Lock()
+        self.published: list[list[MapHint | UserHint]] = []  # per commit, for tests
+
+    def publish(self, hints: list[MapHint | UserHint]) -> None:
+        self.published.append(hints)
+        with self._lock:
+            consumers = list(self._consumers)
+        for loop, queue in consumers:
+            for hint in hints:
+                with contextlib.suppress(RuntimeError):  # that consumer's loop has closed
+                    loop.call_soon_threadsafe(queue.put_nowait, hint)
+
+    def resync(self) -> None:
+        """What a reconnect looks like to consumers."""
+        with self._lock:
+            consumers = list(self._consumers)
+        for loop, queue in consumers:
+            with contextlib.suppress(RuntimeError):
+                loop.call_soon_threadsafe(queue.put_nowait, Resync())
+
+    async def hints(self) -> AsyncIterator[Hint]:
+        entry = (asyncio.get_running_loop(), asyncio.Queue[Hint]())
+        with self._lock:
+            self._consumers.append(entry)
+        try:
+            yield Resync()
+            while True:
+                yield await entry[1].get()
+        finally:
+            with self._lock:
+                self._consumers.remove(entry)
+
 
 class InMemoryRepository:
     def __init__(self) -> None:
         self.data = _Data()
         self._lock = threading.RLock()  # one transaction at a time: every row is "locked"
+        self.feed = InMemoryFeed()
 
     @contextmanager
     def tx(self) -> Iterator[InMemoryTx]:
         with self._lock:
             snapshot = copy.deepcopy(self.data)
+            tx = InMemoryTx(self.data)
             try:
-                yield InMemoryTx(self.data)
+                yield tx
             except BaseException:
                 self.data.__dict__.update(snapshot.__dict__)
                 raise
+            hints = resolve_hints(self.data, tx.recorded) if tx.recorded else []
+        if hints:
+            self.feed.publish(hints)
+
+    def hints(self) -> AsyncIterator[Hint]:
+        return self.feed.hints()
 
     @contextmanager
     def read(self) -> Iterator[InMemoryTx]:

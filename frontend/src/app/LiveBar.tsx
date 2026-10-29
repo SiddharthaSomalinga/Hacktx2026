@@ -19,7 +19,7 @@ export function LiveBar() {
   const searchId = data?.search_id ?? undefined
   const match = useMatch(matchId, matchId !== undefined && !location.pathname.startsWith('/match/'))
   const search = useSearchStatus(searchId, searchId !== undefined && matchId === undefined && !location.pathname.startsWith('/search/'))
-  const left = useCountdown(search.data?.seconds_left)
+  const left = useCountdown(search.data?.seconds_left, search.dataUpdatedAt)
 
   if (!data?.user) return null
 

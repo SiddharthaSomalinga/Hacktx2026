@@ -85,6 +85,35 @@ class HiddenReason(StrEnum):
     TABLE_FULL = "table_full"
 
 
+class SeatChange(StrEnum):
+    """What one seat_state write changed that others can see (D61). Ordered: PUBLIC > PRESENCE."""
+
+    NONE = "none"  # nothing visible: last_seen moved, a candidate started, a blink was set
+    PRESENCE = "presence"  # a person is present again (the host at this seat, FR-24)
+    PUBLIC = "public"  # the seat's public state changed (the map, table-mates, alt seats)
+
+
+class UserChange(StrEnum):
+    """Why something a user's own GETs return may have changed (D61)."""
+
+    SESSION = "session"
+    SEARCH = "search"
+    REQUEST = "request"
+    MATCH = "match"
+    SEAT = "seat"  # a seat that the user's host status or match depends on
+    BLOCK = "block"
+    TIME = "time"  # found by the sweep: the clock alone changed a view
+
+
+class LiveTopic(StrEnum):
+    """What an `invalidate` event names: the client's per-user queries (D61)."""
+
+    ME = "me"
+    SEARCH = "search"
+    INBOX = "inbox"
+    MATCH = "match"
+
+
 class OutboxKind(StrEnum):
     REQUEST_RECEIVED = "request_received"
     REQUEST_ACCEPTED = "request_accepted"

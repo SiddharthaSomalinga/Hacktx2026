@@ -6,7 +6,7 @@ from dataclasses import replace
 
 from app.domain import notifications as notify
 from app.domain.geometry import nearest_seat
-from app.domain.types import HostSession, Match, MatchStatus, PublicState
+from app.domain.types import HostSession, Match, MatchStatus, PublicState, Seat, SeatChange
 from app.services.context import Context
 from app.services.errors import conflict, forbidden, not_found
 from app.services.facts import Facts
@@ -28,6 +28,17 @@ def _participant(
     return match, host
 
 
+def alternative_seat(facts: Facts, match: Match, host_seat: Seat) -> str | None:
+    """FR-39 / D25: once the assigned seat is no longer open, both sides see the nearest open
+    seat on its floor."""
+    assigned = facts.seat(match.assigned_seat_id) if match.assigned_seat_id else None
+    if assigned is None or facts.state(assigned) is PublicState.OPEN:
+        return None
+    candidates = [s for s in facts.open_seats_on_floor(assigned) if s.id != host_seat.id]
+    found = nearest_seat(assigned, candidates)
+    return found.id if found else None
+
+
 class MatchService:
     def __init__(self, ctx: Context, lifecycle: LifecycleService) -> None:
         self._ctx = ctx
@@ -47,15 +58,6 @@ class MatchService:
             other = tx.user(host.user_id if is_seeker else match.seeker_id)
             building = facts.building(host_seat.building_id)
             assert other is not None and building is not None
-            alt = None
-            assigned = facts.seat(match.assigned_seat_id) if match.assigned_seat_id else None
-            if assigned is not None and facts.state(assigned) is not PublicState.OPEN:
-                # FR-39 / D25: both sides see the nearest open seat on the floor.
-                candidates = [
-                    s for s in facts.open_seats_on_floor(assigned) if s.id != host_seat.id
-                ]
-                found = nearest_seat(assigned, candidates)
-                alt = found.id if found else None
             return MatchView(
                 status=match.status,
                 role="seeker" if is_seeker else "host",
@@ -67,7 +69,7 @@ class MatchService:
                 table_id=host_seat.table_id,
                 table_label=facts.table_of(host_seat).label,
                 assigned_seat_id=match.assigned_seat_id,
-                alt_seat_id=alt,
+                alt_seat_id=alternative_seat(facts, match, host_seat),
                 icebreaker=match.icebreaker,
                 card_url=f"/cards/{match.card_key}.png",
             )
@@ -85,7 +87,8 @@ class MatchService:
             tx.update_match(replace(match, status=MatchStatus.COMPLETED, arrived_at=now))
             state = tx.lock_seat_state(host.seat_id)
             if state is not None:
-                tx.save_seat_state(replace(state, blink_until=now + self._ctx.timers.blink))
+                blink = replace(state, blink_until=now + self._ctx.timers.blink)
+                tx.save_seat_state(blink, change=SeatChange.NONE)  # LED only, never public
         return MatchStatus.COMPLETED
 
     def cancel(self, user_id: str, match_id: str) -> MatchStatus:

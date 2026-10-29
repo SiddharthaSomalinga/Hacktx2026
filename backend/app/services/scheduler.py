@@ -9,9 +9,12 @@ from __future__ import annotations
 import logging
 from datetime import datetime
 
+from app.domain.types import UserChange
 from app.services.context import Context
 from app.services.errors import DomainError
+from app.services.facts import Facts
 from app.services.lifecycle import LifecycleService
+from app.services.match import alternative_seat
 from app.services.ports import Lock
 from app.services.requests import RequestService
 
@@ -23,6 +26,9 @@ class SchedulerService:
         self._ctx = ctx
         self._lifecycle = lifecycle
         self._requests = requests
+        # When this process first saw each idle search. Derived, not state of record: losing it
+        # only delays a resume by SEARCH_STALL_S.
+        self._idle_since: dict[str, datetime] = {}
 
     def tick(self) -> int:
         started = self._ctx.clock.monotonic()
@@ -32,6 +38,8 @@ class SchedulerService:
             sessions = tx.due_session_ids(now, now - t.host_end)
             matches = tx.due_match_ids(now, now - t.host_leave_cancel)
             searches = tx.due_search_ids(now, now - t.human_fresh)
+            idle = tx.idle_search_ids()
+        searches += self._stalled(idle, now)
         for session_id in sessions:
             self._lifecycle.advance_session(session_id, Lock.SKIP)
         for match_id in matches:
@@ -42,6 +50,40 @@ class SchedulerService:
         due = len(sessions) + len(matches) + len(searches) + accepted
         self._ctx.metrics.observe_tick(self._ctx.clock.monotonic() - started, due)
         return due
+
+    def sweep(self, since: datetime, until: datetime) -> int:
+        """Hint users whose views changed between `since` and `until` with no write (D61): a
+        host's presence lapsing (FR-24 away), a table-mate's seat going offline (table full),
+        a match's alternative seat moving (FR-39). Each view is evaluated at both times on the
+        same data, so only what time changed shows. Returns the number of users hinted."""
+        t = self._ctx.timers
+        changed: set[str] = set()
+        with self._ctx.repo.read() as tx:
+            before, after = Facts(tx, since, t), Facts(tx, until, t)
+            for session in tx.live_sessions():
+                if before.host_status(session) != after.host_status(session):
+                    changed.add(session.user_id)
+                match = tx.active_match_for_session(session.id)
+                host_seat = after.seat(session.seat_id)
+                if match is None or host_seat is None:
+                    continue
+                if alternative_seat(before, match, host_seat) != alternative_seat(
+                    after, match, host_seat
+                ):
+                    changed.update((match.seeker_id, session.user_id))
+        if changed:
+            with self._ctx.repo.tx() as tx:
+                tx.touch_users(sorted(changed), UserChange.TIME)
+        return len(changed)
+
+    def _stalled(self, idle: list[str], now: datetime) -> list[str]:
+        """Idle searches this process has seen idle for SEARCH_STALL_S (D61). An idle search is
+        normally a send in flight (ranking can take AI_TIMEOUT_S); one idle longer lost its send
+        to a failure, and nothing else would resume it once clients stop polling."""
+        self._idle_since = {sid: self._idle_since.get(sid, now) for sid in idle}
+        return [
+            sid for sid, since in self._idle_since.items() if now - since >= self._ctx.search_stall
+        ]
 
     def _accept_for_demo_hosts(self, now: datetime) -> int:
         """D56: a simulated host accepts a request DEMO_ACCEPT_S after it arrives, through the

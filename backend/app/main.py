@@ -6,6 +6,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+import anyio
 from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -17,6 +18,7 @@ from app.interface.observability import RequestContext, configure_logging
 from app.interface.routes import (
     account,
     host,
+    live,
     matches,
     metrics,
     public,
@@ -37,7 +39,11 @@ def create_app(settings: Settings, services: Services) -> FastAPI:
         if worker is not None:
             worker.start()
         try:
-            yield
+            async with anyio.create_task_group() as tg:
+                if settings.live_enabled:
+                    tg.start_soon(services.live.hub.run)
+                yield
+                tg.cancel_scope.cancel()
         finally:
             if worker is not None:
                 worker.stop()
@@ -75,6 +81,7 @@ def create_app(settings: Settings, services: Services) -> FastAPI:
         matches,
         safety,
         push,
+        live,
         metrics,
     ):
         app.include_router(module.router)

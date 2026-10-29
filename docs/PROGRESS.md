@@ -9,8 +9,8 @@ Session log. Concrete changes, commands and observed results only.
   (`eb8474c`), with CI green.
 - **Live:** `https://64.177.55.143.sslip.io` (server 2 at `45.32.219.190`), D57. Still runs the
   D57 build; nothing from D59 or D60 is deployed.
-- **Tests:** 236 pass with Postgres (`make test-db`); 204 pass and 32 skip without it; bridge 13;
-  frontend 34 (Vitest); browser e2e 1 (Playwright, against the compose stack). Live e2e: 114/114
+- **Tests:** 300 pass with Postgres (`make test-db`); 256 pass and 44 skip without it; bridge 13;
+  frontend 50 (Vitest); browser e2e 5 (Playwright, against the compose stack). Live e2e: 114/114
   (Session 6).
 - **Open questions:** Q14, Q19, Q21, Q22 (PLAN).
 
@@ -741,6 +741,116 @@ Caught before committing:
    Vitest case flips one seat between every pair of states; it failed 1 of 2 before the fix.
    Frontend tests: 34.
 
+## 2026-10-28 — Session 13: live stream (D61), branch `v6-live`
+
+### Built
+- **Hints.** Repository writers record hints and flush them as `pg_notify` before COMMIT.
+  `save_seat_state` requires a `SeatChange`, and `WRITE_EFFECTS`/`READS` classify every `Tx`
+  method. The LISTEN feed uses one unpooled `AsyncConnection` with a self-probe and backoff,
+  and yields `Lost`/`Resync`.
+- **`LiveHub`.** Each process rebuilds every watched snapshot every `LIVE_CHECK_S`, or at once
+  on a hint, with a churn cap. Streams use latest-wins slots and a ping every `POLL_WEB_S`,
+  with `db`/`hints` health.
+- **Sweep.** After each tick it hints users whose views changed with time alone.
+- **`GET /api/live`.** A custom ASGI response: `fail_after(LIVE_STALL_S)` on each write, a
+  disconnect watcher, and a quiet end on server shutdown. Stream metrics are kept out of the
+  latency histogram.
+- **Frontend.** `useLive`, plus a pure state machine. A query polls only once its data is
+  `LIVE_FOR_MS` old with nothing vouching for it, and logged out, `/api/me` never polls.
+
+### Verified
+- `make test-db`: 297 passed (before the load tooling), including the random walk:
+  10 seeds × 150 steps. Every change a user's GETs show was hinted, and no GET after a tick
+  wrote anything.
+- Mutations, each restored after:
+  - no NOTIFY flush: every Postgres hint test fails;
+  - seat watchers dropped: the public-seat test fails on both repositories;
+  - no hint path in the hub: the push-at-once test fails;
+  - no periodic pass: the time-only and outage tests fail;
+  - no sweep: 6 of 10 walk seeds fail;
+  - host-side request hints dropped: 3 of 6 seeds fail.
+- Real uvicorn with 2 workers, local database, `DEBOUNCE_S=0`: an isolated change reached a
+  stream 15 ms after its post returned. Faster flips waited for the 1 s churn cap, as designed.
+- Shutdown with a stream open: without the flag, 29.2 s (until the client gave up); with
+  `--timeout-graceful-shutdown 6`, 6.3 s, and with 3 streams, no tracebacks.
+- Browser tests on fresh compose stacks: 5 of 5 in 6 of 7 runs before the match-test fix and
+  3 of 3 after it.
+
+### Load (laptop; `load_check --setup --mode poll|sse`, `proc_sample --pid`)
+- Setup: Apple M1, 8 GB; 4 uvicorn workers with JSON logs and multiprocess metrics,
+  `DB_POOL_SIZE=4` (each worker also holds a listener; the local image allows 25); Postgres in
+  Docker (4 CPUs, 2 GB); generator on the same laptop. A fresh server for each run; 60 s
+  runs, 3 runs each for the headline configurations.
+- Quiet building, 1000 phones:
+  - poll: 659–665 req/s; change seen p50 1.64–1.95 s, p95 3.24–3.47 s; server CPU 31–41% of a
+    core; 29–31 DB tx/s.
+  - sse: 17 req/s (connects only); p50 67–73 ms, p95 94–113 ms; server CPU 12–14%; 19 DB tx/s;
+    about 128 B/s per phone (pings).
+- Churn (50 nodes rewriting a 200-seat floor), 2000 phones:
+  - poll: readings p50 0.36–1.5 s with posts starved (720–1071 of about 1460); change p95
+    6.4–10.1 s; 253–1996 flips never shown; server CPU 65–81%.
+  - sse: readings p50 35–38 ms, all posts; change p95 1.19–1.46 s; 0 missed; server CPU
+    35–43%; 9.4–9.9 KB/s per phone, against 2.1–3.2 KB/s polling.
+- Churn, single runs: sse 500 and 1000 had 0 errors and 0 missed flips. sse 4000 had 14,178
+  read timeouts (silence over 9 s) and the server at about one core. sse 8000: 11,084 connect
+  errors against `kern.maxfiles` 30720, with both ends of every connection on the laptop. The
+  listen queue overflowed 0 times in every run.
+- A first sse-500 churn run showed 593 untyped stream errors. It overlapped the stray listener
+  kill (below), and a clean rerun had none; errors are now recorded by type.
+- Not run: server 2 on Vultr. It needs a push of `v6-live` and a deploy (PLAN B7).
+
+### Mistakes made this session
+- **The first live probe wrote to the shared Tiger database.** `backend/.env` points at it,
+  and I assumed it was local. It wrote 10 `seat_readings` rows for `t1-s1` (05:21:03–05:21:21
+  UTC), overwrote its `seat_state` (it read `offline` again 30 s later), and updated
+  `nodes.table-1`. Nothing else was touched (no sessions, no outbox rows). Every later run
+  sets `DATABASE_URL` to the local container and asserts the host first. Cleaned up on
+  Oct 29: 11 rows deleted (the 10 readings and the offline marker the first one wrote at the
+  old `last_seen` + `OFFLINE_S`), and `seat_state.last_seen` restored, so the seat's next
+  reading writes no stray marker.
+- A feed test's `pg_terminate_backend` matched listeners in every database on the local
+  server, including a running load test's (fixed: `AND datname = current_database()`). That
+  run was discarded.
+- A bare `npx tsc -b` emitted `.js` next to every source file. The emitted files were deleted
+  before anything was committed; the typecheck is `npm run typecheck` (`--noEmit`).
+- The CPU sampler first matched processes by command line and missed uvicorn's workers, which
+  `multiprocessing` spawns under another command line. It now follows the process tree.
+
+### Bugs (cause → fix)
+1. **A search could stall for good once nobody polled it.** Cause: `advance_search` expires
+   the pending request in one transaction, ranks hosts outside any lock, then sends in a
+   second one. A failure between the two left the search joined, active and with nothing
+   pending, and `due_search_ids` only selects searches that have a pending request. Only the
+   seeker's own status poll resumed it, and D61 removes that poll. Fix: the tick also resumes
+   searches that each process has seen idle (`idle_search_ids`) for `SEARCH_STALL_S` (10 s).
+   That is long enough for a send in flight, so ticks on four processes don't each call Muse
+   for the same search. New worker test (failed before the fix) and a contract test. 239 pass
+   with Postgres.
+2. **A countdown could keep the previous request's clock.** Cause: `useCountdown` re-anchored
+   only when `seconds_left` changed, so a new request that again reported 300 kept counting
+   from the old anchor. Polling hid it within 3 s; with event-driven refetches it would stay.
+   Fix: the countdown is anchored on the query's `dataUpdatedAt`, which moves on every fetch,
+   and the arithmetic is a pure `remainingAt`, tested with two fetches that both report 300.
+3. **The match browser test failed now and then after passing.** Seen in 1 of 7 full runs on
+   fresh stacks, as "apiRequestContext.post: Request context disposed". Cause: `sensePerson`'s
+   stop only cleared a flag, so a reading in flight could outlive the test and reject once
+   Playwright disposed `request`. Fix: stop awaits the loop. Then 3 of 3 full runs passed.
+4. **The live inbox browser test failed in CI, after passing locally** (PR #5's first run).
+   Cause: the browser tests share one stack, one sensor node and the demo users Alex and
+   Priya, but the match test left them matched, and CI ran it before the inbox test on two
+   workers. The inbox test then found Alex already hosting a match and timed out waiting for
+   the "Open to study partners" switch. Locally the files had run in the other order.
+   Reproduced by running the match test, then the inbox test, on one stack. Fix: both tests
+   end with a shared `leaveAsFound` (cancel the match and search, close hosting), and
+   Playwright runs one test at a time. Then the match test followed by the live tests passed,
+   and two full runs back to back on one stack passed 5 of 5 each.
+
+### History
+- `main` squashed from 136 to 80 commits: straight runs of my commits on Oct 25 and Oct 27,
+  and 11 merges of `v1backend` whose lines are merged again later. Each kept commit has its
+  original tree, author and dates. Teammates' commits are unchanged. The final tree and the
+  tagged tree are identical; `hacktx-2026` is now `6f55583`.
+
 ## Next steps
 1. **Before redeploying,** check each server's Caddyfile upstream (bug 1). Then
    `HOSTS="root@64.177.55.143 root@45.32.219.190" make deploy` from `backend/`, and confirm
@@ -748,6 +858,6 @@ Caught before committing:
 2. **Branch cleanup:** `v1`, `v1frontend`, `v1backend`, `v1final`, `v2-frontendredo`,
    `Arduino/Transmitter-Code`, `v3-repoaudit`, `v4-engineering`, and the `Hacktx2026-v2`
    worktree; all are contained in `main`.
-3. **Load:** run the generator from a second machine to find where 2000 connections stall.
+3. **Load:** polling and SSE against Vultr server 2 from the laptop (needs a push and a deploy), then per-seat deltas if bytes stay the SSE ceiling.
 4. **Q22:** a license, with the team.
 5. **Q14 / D58:** thermal + IR hardware for real ghost-seat detection.

@@ -36,6 +36,7 @@ REQUIRED = {
     ("GET", "/api/push/vapid-public-key"),
     ("POST", "/api/push/subscribe"),
     ("DELETE", "/api/push/subscribe"),
+    ("GET", "/api/live"),
 }
 
 

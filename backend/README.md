@@ -127,6 +127,11 @@ a search that a request or another instance is advancing; it leaves it for the n
   text: request latency by route template and status, scheduler tick duration, push outcomes
   (`sent`, `retry`, `gave_up`), AI fallbacks by call, and the unsent outbox rows, counted at
   scrape time. Paths no route matches share the label `unmatched`.
+- **Live streams (D61)** are kept out of the latency histogram, where hour-long requests would
+  swamp the percentiles. `ghostseats_live_streams` counts the open ones,
+  `ghostseats_live_stream_duration_seconds` how long they lasted, and
+  `ghostseats_http_response_bytes` what every route sent. A stream's access line is written
+  when it closes, with `stream: true`.
 - **Several processes.** A scrape reaches one uvicorn process. With `PROMETHEUS_MULTIPROC_DIR`
   set (the image does), every process writes its samples there and each scrape sums them. With
   2 workers I sent 20 requests and scraped four times: every scrape reported 20.
@@ -206,6 +211,13 @@ make deploy HOSTS="root@<ip-1> root@<ip-2>" REF=origin/main
   broken until the next deploy.
 - **A short gap per host.** There is no load balancer (D57): each server is reached at its own
   address, so the one being restarted is unreachable for a few seconds.
+- **Live streams on restart (D61).** uvicorn waits for open connections before it stops, and a
+  stream never ends on its own, so the image passes `--timeout-graceful-shutdown 6`. Measured
+  with one stream open: without the flag, shutdown waited until the client left (29 s, when
+  `curl --max-time 30` gave up); with it, the process exited 6.3 s after SIGTERM, and each
+  stream ended with one log line instead of a traceback. Clients reconnect with backoff and
+  poll meanwhile. Compose allows 15 s before SIGKILL and raises `nofile` to 65536, one socket
+  per stream behind Caddy.
 - **`make image`** builds the same image locally, with the frontend from `frontend/`.
 
 ## Security
@@ -239,11 +251,12 @@ make deploy HOSTS="root@<ip-1> root@<ip-2>" REF=origin/main
   cached, so each distinct topic text is sent once.
 - **Push is at-least-once.** The sender pushes inside the transaction that marks the row sent;
   if a process dies between the push and the commit, the notification is sent again.
-- **Timer lag.** A timer fires up to `SCHEDULER_TICK_S` (2 s) late when nobody polls, and the
-  map can be up to `MAP_CACHE_S` (1 s) stale per instance.
-- **Connection budget.** Processes × instances × `DB_POOL_SIZE` (5) has to fit inside the
-  database's connection limit. The local image allows 25. Tiger Data allows 105 (12 reserved),
-  and the deploy uses 2 servers × 2 workers × 5 = 20.
+- **Timer lag.** A timer fires up to `SCHEDULER_TICK_S` (2 s) late, and a time-only change
+  (the ghost timer, a seat going offline) reaches open apps up to `LIVE_CHECK_S` (1 s) after
+  it happens. The polling fallback can be up to `MAP_CACHE_S` (1 s) stale per instance.
+- **Connection budget.** Processes × instances × (`DB_POOL_SIZE` + 1 live listener) has to fit
+  inside the database's connection limit. The local image allows 25. Tiger Data allows 105
+  (12 reserved), and the deploy uses 2 servers × 2 workers × 6 = 24.
 - **Placeholder seat ids.** The demo table uses node `table-1` and seats `t1-s1`, `t1-s2` until
   the hardware ids replace them in `sql/seed.sql`.
 - **Web push is unverified on real devices.** The API runs on two Vultr servers (D57), but push

@@ -137,6 +137,16 @@ commit when green.
 2. ⬜ Three full rehearsals on the venue network with all roles.
 3. ⬜ Merge `v1 → main`; root README (what it is, run/test commands, key decisions); Devpost.
 
+### B7 — Live stream (D61, `v6-live`)
+1. ✅ Contract: FR-10, §7 `GET /api/live`, §8 `SEARCH_STALL_S` and `LIVE_*`.
+2. ✅ Bugs polling hid: a stalled search resumes after `SEARCH_STALL_S`; countdowns re-anchor on every fetch.
+3. ✅ Hints recorded by every repository writer (`WRITE_EFFECTS`), sent before COMMIT through `NOTIFY`; LISTEN feed with probe and reconnect. Contract tests on both repositories; NOTIFY across two instances.
+4. ✅ `LiveHub`: periodic and hinted rebuilds, latest-wins streams, pings, health.
+5. ✅ Sweep for time-only per-user changes; tick completeness and a seeded random walk.
+6. ✅ Route, stream metrics, bounded shutdown (`--timeout-graceful-shutdown 6`), `nofile`.
+7. ✅ Frontend: `useLive`, polling only when the stream can't vouch for the data; browser tests.
+8. 🚧 `load_check --mode sse` and `proc_sample`; laptop results ✅ (PROGRESS); a run on server 2 ⬜ (needs a push and a deploy).
+
 ## Frontend checklist — software partner (`v1frontend`)
 
 Ticked for `v2-frontendredo` (D44).
@@ -251,7 +261,7 @@ At each checkpoint: every role pushes its branch, the branches merge into `v1fin
 
 ## Out of scope
 
-REQUIREMENTS §11, plus WebSockets (FR-10 specifies polling).
+REQUIREMENTS §11, plus WebSockets: the app only needs server-to-client events, which SSE carries (D61).
 
 ## Questions and unknowns
 
@@ -699,3 +709,32 @@ for the team.
 - The bridge reads `SYNAPSE_URL`, falling back to `GHOSTSEATS_URL`; HW-7 names `SYNAPSE_URL`.
 - The Vite dev proxy target is `API_PROXY_TARGET`, default `http://localhost:8000`.
 - No hardware change: the real presence sensor stays the next step (D58, D60).
+
+**D61 — A live stream replaces polling, on `v6-live`.** The author's call, after the third
+outside review; FR-10, §7 and §8 amended with the author's agreement for the team. The author
+also makes the frontend change, as for D44.
+- `GET /api/live` is one Server-Sent Events stream per open app. It carries the buildings
+  list, the focused building's floor plan (the exact GET bodies), topic-only `invalidate`
+  events for the logged-in user, and a `ping` every `POLL_WEB_S`. Polling resumes only when
+  the stream has been down for `LIVE_FOR_MS`, so the D46 freshness rules hold unchanged.
+- Each process runs one hub. It rebuilds each watched snapshot every `LIVE_CHECK_S`, which
+  covers changes made by time alone (ghost timer, offline, simulation slots), and at once
+  when a change hint arrives. Its cost depends on the number of watched buildings, not on
+  the number of phones.
+- Hints travel through Postgres `LISTEN`/`NOTIFY` on one channel. NOTIFY is part of the
+  transaction, so a rolled-back write sends nothing. Each process listens on one extra,
+  unpooled primary connection. Hints only cut latency: every event is read back from the
+  database, so NFR-8 holds.
+- Hints are recorded by the repository's writers, never by services. `save_seat_state`
+  requires the seat's `SeatChange` (`none`, `presence`, `public`), computed by the domain,
+  so a reading that changes nothing public sends nothing. Schema triggers were rejected:
+  they cannot read the thresholds (NFR-6) and have no in-memory twin.
+- Per-user changes that come from time alone (presence lapsing, a table-mate going offline,
+  a match's alternative seat) are found by a sweep after each scheduler tick. It compares
+  each view at the previous and the current tick time.
+- Two bugs that polling hid are fixed first. A joined search left with no pending request
+  (a failure between expiry and the next send) is now advanced by the scheduler after
+  `SEARCH_STALL_S`. A countdown now re-anchors on every fetch, not only when the number
+  changes.
+- Out of scope: per-seat deltas. The stream sends whole snapshots, measured against polling
+  in PROGRESS.

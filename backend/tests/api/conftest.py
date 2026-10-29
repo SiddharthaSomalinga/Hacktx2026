@@ -70,6 +70,7 @@ def make_world(
             vapid_public_key=settings.vapid_public_key,
             demo_hosts=settings.demo_hosts,
             demo_accept=timedelta(seconds=settings.demo_accept_s),
+            search_stall=timedelta(seconds=settings.search_stall_s),
         )
         services = Services.build(ctx)
         build_world(repo)

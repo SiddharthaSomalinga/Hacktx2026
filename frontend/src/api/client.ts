@@ -22,6 +22,11 @@ export function isUnavailable(error: unknown): boolean {
 
 const etags = new Map<string, { etag: string; data: unknown }>()
 
+/** Data that arrived another way (the live stream, D61), so the next poll can get a 304. */
+export function primeEtag(path: string, etag: string, data: unknown): void {
+  etags.set(`/api${path}`, { etag, data })
+}
+
 function retryAfter(response: Response): number | undefined {
   const seconds = Number(response.headers.get('Retry-After'))
   return Number.isFinite(seconds) && seconds > 0 ? seconds * 1000 : undefined

@@ -113,7 +113,7 @@ export function HostScreen() {
         {count === 0 ? (
           <p className={`${s.small} ${s.muted}`}>{findable ? 'No requests yet. They appear here, and as a notification if you turn those on.' : 'No requests while you are hidden.'}</p>
         ) : (
-          inbox.data?.map((item) => <InboxCard key={item.request_id} item={item} />)
+          inbox.data?.map((item) => <InboxCard key={item.request_id} item={item} fetchedAt={inbox.dataUpdatedAt} />)
         )}
       </section>
 

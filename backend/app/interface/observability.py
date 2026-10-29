@@ -72,7 +72,8 @@ def route_template(scope: Scope) -> str:
 
 class RequestContext:
     """Pure ASGI middleware: assigns the request id, echoes it, writes one access line and
-    records the request's duration."""
+    records the request's duration and body bytes. A live stream (`text/event-stream`, D61) is
+    recorded as a stream instead: its duration is how long a phone stayed, not a latency."""
 
     def __init__(self, app: ASGIApp, metrics: MetricsService) -> None:
         self.app = app
@@ -88,12 +89,20 @@ class RequestContext:
         request_id.set(rid)
         started = time.perf_counter()
         status = 500  # what the client gets if the app raises before responding
+        stream = False
+        sent = 0
 
         async def send_with_id(message: Message) -> None:
-            nonlocal status
+            nonlocal status, stream, sent
             if message["type"] == "http.response.start":
                 status = message["status"]
-                MutableHeaders(scope=message).append("X-Request-ID", rid)
+                headers = MutableHeaders(scope=message)
+                headers.append("X-Request-ID", rid)
+                stream = headers.get("content-type", "").startswith("text/event-stream")
+                if stream:
+                    self.metrics.stream_opened()
+            elif message["type"] == "http.response.body":
+                sent += len(message.get("body", b""))
             await send(message)
 
         try:
@@ -102,7 +111,11 @@ class RequestContext:
             elapsed_s = time.perf_counter() - started
             elapsed_ms = elapsed_s * 1000
             method, path, route = scope["method"], scope["path"], route_template(scope)
-            self.metrics.observe_request(method, route, status, elapsed_s)
+            self.metrics.count_bytes(route, sent)
+            if stream:
+                self.metrics.stream_closed(elapsed_s)
+            else:
+                self.metrics.observe_request(method, route, status, elapsed_s)
             access_log.info(
                 "%s %s %d %.1fms",
                 method,
@@ -116,6 +129,8 @@ class RequestContext:
                         "route": route,
                         "status": status,
                         "duration_ms": round(elapsed_ms, 1),
+                        "bytes": sent,
+                        "stream": stream,
                     }
                 },
             )
