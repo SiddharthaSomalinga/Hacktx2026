@@ -1,4 +1,5 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test'
+import { leaveAsFound } from './cleanup'
 
 // The live stream (D61) in a real browser, against the compose stack with DEBOUNCE_S=0:
 // changes arrive without polling, and polling comes back only when the stream can't serve.
@@ -93,10 +94,7 @@ test('a host sees a request arrive without polling the inbox', async ({ browser,
     expect(api.filter((p) => p === '/api/host/inbox').length).toBe(fetchedOnHint) // and nothing since
   } finally {
     clearInterval(heartbeat)
-    // Leave the stack as it was found: the match test hosts as Alex and searches as Priya.
-    const searchId = (await (await seeker.request.get('/api/me')).json()).search_id as string | null
-    if (searchId) await seeker.request.post(`/api/search/${searchId}/cancel`)
-    await host.request.post('/api/host/toggle', { data: { open: false } })
+    await leaveAsFound(host, seeker)
   }
 })
 

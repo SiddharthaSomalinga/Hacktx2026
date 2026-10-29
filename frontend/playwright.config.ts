@@ -6,6 +6,8 @@ export default defineConfig({
   testDir: 'e2e',
   testMatch: '**/*.e2e.ts', // not *.spec.ts, so Vitest never picks these up
   timeout: 90_000,
+  // One at a time: every test plays the same sensor node and logs in as the same demo users.
+  workers: 1,
   reporter: process.env.CI ? [['list'], ['html', { open: 'never' }]] : 'list',
   use: {
     ...devices['Pixel 7'], // phone-first (NFR-4)

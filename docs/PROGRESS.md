@@ -834,6 +834,15 @@ Caught before committing:
    fresh stacks, as "apiRequestContext.post: Request context disposed". Cause: `sensePerson`'s
    stop only cleared a flag, so a reading in flight could outlive the test and reject once
    Playwright disposed `request`. Fix: stop awaits the loop. Then 3 of 3 full runs passed.
+4. **The live inbox browser test failed in CI, after passing locally** (PR #5's first run).
+   Cause: the browser tests share one stack, one sensor node and the demo users Alex and
+   Priya, but the match test left them matched, and CI ran it before the inbox test on two
+   workers. The inbox test then found Alex already hosting a match and timed out waiting for
+   the "Open to study partners" switch. Locally the files had run in the other order.
+   Reproduced by running the match test, then the inbox test, on one stack. Fix: both tests
+   end with a shared `leaveAsFound` (cancel the match and search, close hosting), and
+   Playwright runs one test at a time. Then the match test followed by the live tests passed,
+   and two full runs back to back on one stack passed 5 of 5 each.
 
 ### History
 - `main` squashed from 136 to 80 commits: straight runs of my commits on Oct 25 and Oct 27,

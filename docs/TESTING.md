@@ -131,5 +131,6 @@ docker compose -f compose.yaml -f compose.e2e.yaml up -d --build
 cd frontend && npx playwright install chromium && npm run e2e
 ```
 
-Set `PORT` for compose and `E2E_BASE_URL` for the test to use a port other than 8000. CI runs the
+The tests run one at a time and each leaves the demo users as it found them: they all play
+the same sensor node and log in as Alex and Priya. Set `PORT` for compose and `E2E_BASE_URL` for the test to use a port other than 8000. CI runs the
 same steps in its `e2e` job.
