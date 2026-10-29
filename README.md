@@ -8,7 +8,8 @@ Built by 4 people at HackTX 2026, Sat 6 pm → Sun 11:30 am. The tag [`hacktx-20
 
 **Live:** <https://64.177.55.143.sslip.io>. Pick a demo user, search a course such as "macro econ" and tap Join; a simulated host accepts in about 5 s and the match shows where to go.
 
-<p align="center"><img src="docs/images/demo.gif" width="300" alt="Seat states changing on the floor plan, then a study-partner match"/></p>
+https://github.com/user-attachments/assets/41e16989-e90b-4dd9-8c19-8be505fa0224
+
 <p align="center"><sub>Recorded on a local stack. <code>make fake-node</code> stands in for the sensor, the ghost timer is shortened to 15 s, and the first half runs at 4× speed. A person sits (blue), a bag is left alone (blue, then yellow "likely opening"), the person leaves (green); then a seeker asks to join and a simulated host accepts.</sub></p>
 
 | Campus map and demo login | Live floor plan | Study-partner match |

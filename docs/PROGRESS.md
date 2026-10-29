@@ -724,6 +724,7 @@ Caught before committing:
   31.2 s. Frames at 2, 9, 16, 24 and 30 s checked by eye. Homebrew's ffmpeg failed (the
   Command Line Tools predate macOS 14), so the encode used the static ffmpeg 7.1 from the
   `imageio-ffmpeg` wheel, run through `uvx`.
+  Uploaded as a GitHub attachment; the README embeds that URL and `demo.gif` is removed.
 - Bridge: `SYNAPSE_URL`, then `GHOSTSEATS_URL`, then `http://localhost:8000`; three new
   parametrized cases (default, old name, new name wins). 13 bridge tests pass.
 - `backend/Makefile`: `seed-demo` and `cards` added to `.PHONY` (a script now finds no target
