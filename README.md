@@ -4,9 +4,9 @@
 
 A library seat map fed by desk sensors, with study-partner matching on top. Every seat reading carries `object_present` and `human_present`. A pure state machine in the backend turns them into one of four public states: `open`, `occupied`, `likely_opening` (belongings left with nobody there for 30 s, a "ghost seat"), or `offline`. Students studying the same course can then request an open spot at a host's table. Readings are stored change-only in TimescaleDB, and seat transitions run under `SELECT … FOR UPDATE`, so several API instances can share one database.
 
-Built by 4 people at HackTX 2026, Sat 6 pm → Sun 11:30 am. The tag [`hacktx-2026`](https://github.com/SiddharthaSomalinga/Hacktx2026/tree/hacktx-2026) is what we demoed at 11:30 Sunday; `main` has changed since (docs, layout, CI).
+Built by 4 people at HackTX 2026, Sat 6 pm → Sun 11:30 am. The tag [`hacktx-2026`](https://github.com/SiddharthaSomalinga/Hacktx2026/tree/hacktx-2026) is what we demoed at 11:30 Sunday; `main` has changed since (docs, layout, CI, the live stream).
 
-**Live:** <https://64.177.55.143.sslip.io>. Pick a demo user, search a course such as "macro econ" and tap Join; a simulated host accepts in about 5 s and the match shows where to go.
+**Live:** <https://64.177.55.143.sslip.io>. The sensor hardware went home with the hackathon, so the map runs on simulated seats that change every minute; leave a floor plan open and seats flip without a reload. Pick a demo user, search a course such as "macro econ" and tap Join; a simulated host accepts in about 5 s and the match shows where to go.
 
 https://github.com/user-attachments/assets/41e16989-e90b-4dd9-8c19-8be505fa0224
 
@@ -23,6 +23,7 @@ https://github.com/user-attachments/assets/41e16989-e90b-4dd9-8c19-8be505fa0224
 |---|---|
 | Seat sensing | **Real, one sensor.** The prototype has a single IR sensor per seat; those were the parts available at the hackathon. A single IR beam can't distinguish a person from a bag, so the bridge sends its value as both `object_present` and `human_present` |
 | Ghost-seat detection (`likely_opening`) | **Modeled in the backend, not reachable from the prototype.** It needs "object yes, human no", which one IR sensor never reports. `make fake-node` can send it (`1 b`). Planned upgrade: a thermal sensor for the person plus IR for belongings, feeding the two fields the backend already reads |
+| Seats on the live map | **Simulated, except PCL Table 01.** Each simulated seat's state is computed on read from a hash of its id and the current minute (`SIM_SLOT_S`, 60 s), weighted by the building's busyness, and the live stream pushes each new minute to open maps. Table 01's two seats belong to the prototype sensor, which is no longer connected, so those two don't change |
 | Demo hosts | **Simulated.** With `DEMO_HOSTS=true`, `make seed-demo` creates one host per catalog course, and they accept requests after `DEMO_ACCEPT_S` (5 s) |
 | Desk installation diagram | **Concept**, below |
 | Pulsing blue beacon at the host's seat | **Planned.** The backend returns `blue_blink` for a matched seat; the prototype firmware doesn't read the backend's LED colors yet |
