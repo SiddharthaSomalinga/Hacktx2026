@@ -5,10 +5,10 @@ Session log. Concrete changes, commands and observed results only.
 ## Current status
 
 - **Milestone:** hackathon over; the demo is tagged `hacktx-2026` (D58). The post-hackathon
-  cleanup (D59, PR #1) and the engineering pass (D60, PRs #2 and #3) are merged into `main`
-  (`eb8474c`), with CI green.
-- **Live:** `https://64.177.55.143.sslip.io` (server 2 at `45.32.219.190`), D57. Still runs the
-  D57 build; nothing from D59 or D60 is deployed.
+  cleanup (D59, PR #1), the engineering pass (D60, PRs #2 and #3), the review fixes (D62, PR #4)
+  and the live stream (D61, PR #5) are merged into `main` (`d58efe1`), with CI green.
+- **Live:** `https://64.177.55.143.sslip.io` (server 2 at `45.32.219.190`), D57. Both run
+  `d58efe1` (Session 14).
 - **Tests:** 300 pass with Postgres (`make test-db`); 256 pass and 44 skip without it; bridge 13;
   frontend 50 (Vitest); browser e2e 5 (Playwright, against the compose stack). Live e2e: 114/114
   (Session 6).
@@ -851,13 +851,37 @@ Caught before committing:
   original tree, author and dates. Teammates' commits are unchanged. The final tree and the
   tagged tree are identical; `hacktx-2026` is now `6f55583`.
 
+## 2026-10-29 — Session 14: deploy of `main`, branch `v7-demo-docs`
+
+### Changes
+- PRs #4 and #5 merged into `main` (`d58efe1`); CI green on it.
+- Before deploying, both servers' Caddyfiles were read over SSH: each is
+  `reverse_proxy localhost:8000`, so the 127.0.0.1-only port binding (Session 11, bug 1) needs
+  no Caddy change.
+- `HOSTS="root@64.177.55.143 root@45.32.219.190" make deploy` from `backend/`: both built and
+  came up healthy at `d58efe1`, replacing `df12bef`.
+- README: the "Live" line and a "Seats on the live map" row in "Real vs. simulated" say that
+  the map runs on simulated seats (FR-47) that change every `SIM_SLOT_S`, with PCL Table 01 the
+  only sensor seats.
+
+### Verified (from the laptop, after the deploy)
+- `https://<ip>.sslip.io/api/health` → `{"ok":true,"db":true}` 200 on both; `/` 200.
+- `http://<ip>:8000/api/health` times out on both; port 8000 is no longer public.
+- `curl -N https://64.177.55.143.sslip.io/api/live?building=pcl` through Caddy: `retry:`, the
+  `buildings` and `building` snapshots, then `ping` with `{"db":true,"hints":true}` every 3 s,
+  unbuffered.
+- A 75 s stream on each server received 2 `building` snapshots: the first, and one pushed at the
+  simulation-slot change with no write (D61's periodic check).
+- Before the deploy, two reads of `/api/buildings` a minute apart changed counts in all three
+  buildings, so the map moves without hardware.
+
+### Not verified
+- Push to real devices, unchanged from earlier sessions.
+
 ## Next steps
-1. **Before redeploying,** check each server's Caddyfile upstream (bug 1). Then
-   `HOSTS="root@64.177.55.143 root@45.32.219.190" make deploy` from `backend/`, and confirm
-   `http://<ip>:8000` no longer answers.
-2. **Branch cleanup:** `v1`, `v1frontend`, `v1backend`, `v1final`, `v2-frontendredo`,
+1. **Branch cleanup:** `v1`, `v1frontend`, `v1backend`, `v1final`, `v2-frontendredo`,
    `Arduino/Transmitter-Code`, `v3-repoaudit`, `v4-engineering`, and the `Hacktx2026-v2`
    worktree; all are contained in `main`.
-3. **Load:** polling and SSE against Vultr server 2 from the laptop (needs a push and a deploy), then per-seat deltas if bytes stay the SSE ceiling.
-4. **Q22:** a license, with the team.
-5. **Q14 / D58:** thermal + IR hardware for real ghost-seat detection.
+2. **Load:** polling and SSE against Vultr server 2 from the laptop, then per-seat deltas if bytes stay the SSE ceiling.
+3. **Q22:** a license, with the team.
+4. **Q14 / D58:** thermal + IR hardware for real ghost-seat detection.
